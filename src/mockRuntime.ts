@@ -45,6 +45,8 @@ export class RuntimeVariable {
 
 	public reference?: number;
 
+	public memLoc: number =0;
+
 	public get value() {
 		return this._value;
 	}
@@ -61,7 +63,7 @@ export class RuntimeVariable {
 		return this._memory;
 	}
 
-	constructor(public readonly name: string, private _value: IRuntimeVariableType, public readonly type: string) {}
+	constructor(public readonly name: string, private _value: IRuntimeVariableType, public readonly type: string, public readonly byteLen: number) {}
 
 	public setMemory(data: Uint8Array, offset = 0) {
 		const memory = this.memory;
@@ -109,6 +111,10 @@ export class MockRuntime extends EventEmitter {
 		return this._sourceFile;
 	}
 
+	private _debugFileToEmu: string = '';
+	private _debugFileFromEmu: string = '';
+	private _requestMemoryDumpPayload : Uint8Array = new Uint8Array();
+
 	private variables = new Map<string, RuntimeVariable>();
 	
 	// the contents (= lines) of the one and only file
@@ -145,7 +151,6 @@ export class MockRuntime extends EventEmitter {
 
 	private namedException: string | undefined;
 	private otherExceptions = false;
-
 
 	constructor(private fileAccessor: FileAccessor) {
 		super();
@@ -431,14 +436,25 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	private async loadSource(file: string): Promise<void> {
+
 		if (this._sourceFile !== file) {
-	    file = this.normalizePathAndCasing(file);
-			file = file.replace("readme.md", "test.bas");
+			let ext  = file.split(".").splice(-1)[0].toLowerCase();
+			if (ext !== "bas" && ext !== "lst") {
+				return;
+			}
+
+			file = this.normalizePathAndCasing(file);
 			this._sourceFile = file;
+
+			//file = file.replace("readme.md", "test.bas");
 
 			let symbolFileParts = file.split("/");
 			symbolFileParts[symbolFileParts.length-1] ="bin/" + symbolFileParts[symbolFileParts.length-1].split(".",1)[0];
 			let symbolFile = symbolFileParts.join("/");
+
+			symbolFileParts[symbolFileParts.length-1] ="bin/debug.";
+			this._debugFileToEmu= symbolFileParts.join("/") + "in";
+			this._debugFileFromEmu = symbolFileParts.join("/") + "out";
 
 			this.initializeContents(
 				await this.fileAccessor.readFile(file),
@@ -454,6 +470,8 @@ export class MockRuntime extends EventEmitter {
 		let refsLines = new TextDecoder().decode(refs).split(/\r?\n/);
 
 		/* Reference
+		000006r 1               	.export fb_var_AB
+    000006r 1  xx xx xx xx  fb_var_AB:	.res 6	; Float variable
 		000002r 1  xx xx        fb_var_B:	.res 2	; Word variable
 		000004r 1               	.export fb_var_C
 		000004r 1  xx xx        fb_var_C:	.res 2	; Word Array variable
@@ -492,23 +510,44 @@ export class MockRuntime extends EventEmitter {
 			000011r 1  08           	.byte	8
 			000012r 1  rr           	.byte	TOK_DIM
 			000013r 1  rr           	makevar	"C4"
+			float:
+			00003Ar 1  05           	.byte	5
+			00003Br 1  rr           	.byte	TOK_MUL6
+			00003Cr 1  rr           	.byte	TOK_DIM
+			00003Dr 1  rr           	makevar	"A5"
 			*/
 
 			var value;
+
+			// Determine byte length for this variable type
+			var byteLen=2; 
+			if (varType === "String") {
+				name = name + "$";
+				byteLen = 256;
+			} else if (varType === "Float") {
+				name = name + "%";
+				byteLen = 6;
+			} else if (varType === "Byte") {
+				byteLen = 1;
+			}
+
 			if (varTypeParts.length>1 && varTypeParts[1] === "Array") {
 				let makeVar = `makevar\t\"${name}\"`;
 				
 				for (let j = 2; j < listLines.length; j++) {
 					if (listLines[j].endsWith(makeVar) && listLines[j-1].endsWith("TOK_DIM")) {
-						let arraySize = parseInt(listLines[j-2].split("\t").slice(-1)[0]);
-						if (varType !== "Byte") {
-							arraySize = arraySize / 2;
-						}
+						let arraySize = parseInt(listLines[j-(varType === "Float" ? 3 : 2)].split("\t").slice(-1)[0]);
+						
+						if (varType === "Word" || varType === "String") {
+							arraySize /= 2;
+						} 
+
+						byteLen *= arraySize;
+
 						if (arraySize < 256) {
-							//value = new Uint8Array(arraySize);
 							value = [];
 							for(let k=0;k<arraySize;k++) {
-								value.push(new RuntimeVariable(k.toString(), varType === "String" ? "":0, varType));
+								value.push(new RuntimeVariable(k.toString(), varType === "String" ? "":0, varType, 0));
 							}
 						}
 						break;
@@ -519,10 +558,8 @@ export class MockRuntime extends EventEmitter {
 			}
 			
 			if (typeof value !== 'undefined') {
-				if (varType === "String") {
-					name = name + "$";
-				}
-				let v = new RuntimeVariable(name, value, varType);
+			
+				let v = new RuntimeVariable(name, value, varType, byteLen);
 				this.variables.set(name, v);
 			}
 		}
@@ -533,17 +570,44 @@ export class MockRuntime extends EventEmitter {
 		al 002304 .fb_var_HW
 		al 002306 .fb_var____DEBUG_KEY
 		*/
+		var minLoc = 65536;
 		for (let i = 0; i < refsLines.length; i++) {
 			let parts = refsLines[i].split('.');
 			if (parts.length>1 && parts[1].startsWith("fb_var_")) {
 				let name = parts[1].substring(7);
-				let v = this.variables.get(name);
+				let v = this.variables.get(name) || this.variables.get(name + "$") || this.variables.get(name + "%");
 				if (v) {
-					let num = parseInt(parts[0].substring(3).trim(), 16);
-					//v.reference = num;
+					let memLoc = parseInt(parts[0].substring(5).trim(), 16);
+					if (memLoc<minLoc) {
+						minLoc = memLoc;
+					}
+					v.memLoc = memLoc;
 				}	
 			}		
 		}
+		
+		function setAtariWord(array:Uint8Array, index: number, value: number) {
+			array[index] = value % 256;
+			array[index+1] = value/256;
+		}
+		let requestMemoryDump = new Uint8Array(1+4*(this.variables.size+1));
+
+		requestMemoryDump[0] = 2;// Dump memory
+		setAtariWord(requestMemoryDump, 1, minLoc);
+		setAtariWord(requestMemoryDump, 3, this.variables.size*2);
+		let memDumpIndex = 5;
+		this.variables.forEach(v => {
+			if (v.memLoc) {
+				setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
+				setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
+				memDumpIndex+=4;
+			} else {
+				console.error(`Warning! memLoc not found for varible: ${v.name}`);
+			}
+		});
+
+		this._requestMemoryDumpPayload = requestMemoryDump;
+		//this.fileAccessor.writeFile(this._debugFileToEmu, this._requestMemoryDumpPayload);
 
 		this.instructions = [];
 

@@ -749,7 +749,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		let dapVariable: DebugProtocol.Variable = {
 			name: v.name,
 			value: '???',
-			type: v.type || typeof v.value,
+			type: Array.isArray(v.value) ? typeof v.value : v.type ,
 			variablesReference: 0,
 			evaluateName: '$' + v.name
 		};
@@ -759,19 +759,20 @@ export class MockDebugSession extends LoggingDebugSession {
 			v.reference ??= this._variableHandles.create(v);
 			dapVariable.variablesReference = v.reference;
 		} else {
-
-			switch (typeof v.value) {
-				case 'number':
-					if (Math.round(v.value) === v.value) {
+			switch (v.type) {
+				case 'Byte':
+				case 'Word':
+					if (typeof v.value === 'number') {
 						dapVariable.value = this.formatNumber(v.value);
-						(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
-						dapVariable.type = 'integer';
 					} else {
-						dapVariable.value = v.value.toString();
-						dapVariable.type = 'float';
+						dapVariable.value = typeof v.value;
 					}
+					(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
 					break;
-				case 'string':
+				case 'Float':
+					dapVariable.value = v.value.toString();
+					break;
+				case 'String':
 					dapVariable.value = `"${v.value}"`;
 					break;
 				default:
@@ -780,7 +781,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			}
 		}
 	
-
 		if (v.memory) {
 			v.reference ??= this._variableHandles.create(v);
 			dapVariable.memoryReference = String(v.reference);
