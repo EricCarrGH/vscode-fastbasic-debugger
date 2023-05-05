@@ -17,10 +17,6 @@ export interface IRuntimeBreakpoint {
 	verified: boolean;
 }
 
-interface IRuntimeStepInTargets {
-	id: number;
-	label: string;
-}
 
 interface IRuntimeStackFrame {
 	index: number;
@@ -65,7 +61,7 @@ export class RuntimeVariable {
 		return this._memory;
 	}
 
-	constructor(public readonly name: string, private _value: IRuntimeVariableType) {}
+	constructor(public readonly name: string, private _value: IRuntimeVariableType, public readonly type: string) {}
 
 	public setMemory(data: Uint8Array, offset = 0) {
 		const memory = this.memory;
@@ -268,27 +264,6 @@ export class MockRuntime extends EventEmitter {
 		this.sendEvent('stopOnStep');
 	}
 
-	public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
-
-		const line = this.getLine();
-		const words = this.getWords(this.currentLine, line);
-
-		// return nothing if frameId is out of range
-		if (frameId < 0 || frameId >= words.length) {
-			return [];
-		}
-
-		const { name, index  }  = words[frameId];
-
-		// make every character of the frame a potential "step in" target
-		return name.split('').map((c, ix) => {
-			return {
-				id: index + ix,
-				label: `target: ${c}`
-			};
-		});
-	}
-
 	/**
 	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
 	 */
@@ -478,52 +453,93 @@ export class MockRuntime extends EventEmitter {
 		let listLines = new TextDecoder().decode(list).split(/\r?\n/);
 		let refsLines = new TextDecoder().decode(refs).split(/\r?\n/);
 
-/* Reference
-000002r 1               	.export fb_var_B
-000002r 1  xx xx        fb_var_B:	.res 2	; Word variable
-000004r 1               	.export fb_var_HW
-000004r 1  xx xx        fb_var_HW:	.res 2	; String variable
-000006r 1               	.export fb_var____DEBUG_KEY
-000006r 1  xx xx        fb_var____DEBUG_KEY:	.res 2	; Word variable
-*/
+		/* Reference
+		000002r 1  xx xx        fb_var_B:	.res 2	; Word variable
+		000004r 1               	.export fb_var_C
+		000004r 1  xx xx        fb_var_C:	.res 2	; Word Array variable
+		000006r 1               	.export fb_var_D
+		000006r 1  xx xx        fb_var_D:	.res 2	; Byte Array variable
+		000008r 1               	.export fb_var_HW
+		000008r 1  xx xx        fb_var_HW:	.res 2	; String variable
+		00000Ar 1               	.export fb_var_JJ
+		00000Ar 1  xx xx        fb_var_JJ:	.res 2	; String Array variable
+		00000Cr 1               	.export fb_var____DEBUG_KEY
+		00000Cr 1  xx xx        fb_var____DEBUG_KEY:	.res 2	; Word variable
+		*/
+		for (let i = 0; i < listLines.length; i++) {
+			if (!listLines[i].endsWith(" variable")){continue;}
+			
+			let line = listLines[i];
+			let varTypeStart = line.lastIndexOf("; ")+2;
+			let varTypeEnd = line.length-9;
+			let varStart = line.indexOf(" fb_var_")+8;
+			let varEnd = line.indexOf(":", varStart);
 
-	 for (let i = 0; i < listLines.length; i++) {
-		if (!listLines[i].endsWith(" variable")){continue;}
-		
-		let line = listLines[i];
-		let varTypeStart = line.lastIndexOf("; ")+2;
-		let varTypeEnd = line.indexOf(" ", varTypeStart);
-		let varStart = line.indexOf(" fb_var_")+8;
-		let varEnd = line.indexOf(":", varStart);
+			if (varTypeStart <2 || varTypeEnd<varTypeStart || varStart <8 || varEnd <varStart) {
+				continue;
+			}
+			
+			let name = line.substring(varStart, varEnd);
+			if (name.startsWith("___DEBUG_"))  {
+				continue;
+			}
 
-		if (varTypeStart <2 || varTypeEnd<varTypeStart || varStart <8 || varEnd <varStart) {
-			continue;
+			let varTypeParts = line.substring(varTypeStart, varTypeEnd).split(" ");
+			let varType = varTypeParts[0];
+			
+			// Determine the array length. If it's under 256, add the variable
+			/* 
+			000011r 1  08           	.byte	8
+			000012r 1  rr           	.byte	TOK_DIM
+			000013r 1  rr           	makevar	"C4"
+			*/
+
+			var value;
+			if (varTypeParts.length>1 && varTypeParts[1] === "Array") {
+				let makeVar = `makevar\t\"${name}\"`;
+				
+				for (let j = 2; j < listLines.length; j++) {
+					if (listLines[j].endsWith(makeVar) && listLines[j-1].endsWith("TOK_DIM")) {
+						let arraySize = parseInt(listLines[j-2].split("\t").slice(-1)[0]);
+						if (varType !== "Byte") {
+							arraySize = arraySize / 2;
+						}
+						if (arraySize < 256) {
+							//value = new Uint8Array(arraySize);
+							value = [];
+							for(let k=0;k<arraySize;k++) {
+								value.push(new RuntimeVariable(k.toString(), varType === "String" ? "":0, varType));
+							}
+						}
+						break;
+					}
+				}
+			} else {
+				value = varType === "String" ? "" : 0;
+			}
+			
+			if (typeof value !== 'undefined') {
+				if (varType === "String") {
+					name = name + "$";
+				}
+				let v = new RuntimeVariable(name, value, varType);
+				this.variables.set(name, v);
+			}
 		}
-		
-		let name = line.substring(varStart, varEnd);
-		if (name.startsWith("___DEBUG_"))  {
-			continue;
-		}
 
-		let varType = line.substring(varTypeStart, varTypeEnd);
-		let v = new RuntimeVariable(name, varType === "String" ? "" : 0);
-		this.variables.set(name, v);
-	}
-
-/* Reference
-al 002300 .fb_var_A
-al 002302 .fb_var_B
-al 002304 .fb_var_HW
-al 002306 .fb_var____DEBUG_KEY
-*/
-
+		/* Reference
+		al 002300 .fb_var_A
+		al 002302 .fb_var_B
+		al 002304 .fb_var_HW
+		al 002306 .fb_var____DEBUG_KEY
+		*/
 		for (let i = 0; i < refsLines.length; i++) {
 			let parts = refsLines[i].split('.');
 			if (parts.length>1 && parts[1].startsWith("fb_var_")) {
 				let name = parts[1].substring(7);
 				let v = this.variables.get(name);
 				if (v) {
-					var num = parseInt(parts[0].substring(3).trim(), 16);
+					let num = parseInt(parts[0].substring(3).trim(), 16);
 					//v.reference = num;
 				}	
 			}		
@@ -613,45 +629,15 @@ al 002306 .fb_var____DEBUG_KEY
 
 				const name = matches0[1];
 				const value = matches0[3];
-
+/*
 				let v = new RuntimeVariable(name, value);
-
-				if (value && value.length > 0) {
-
-					if (value === 'true') {
-						v.value = true;
-					} else if (value === 'false') {
-						v.value = false;
-					} else if (value[0] === '"') {
-						v.value = value.slice(1, -1);
-					} else if (value[0] === '{') {
-						v.value = [
-							new RuntimeVariable('fBool', true),
-							new RuntimeVariable('fInteger', 123),
-							new RuntimeVariable('fString', 'hello'),
-							new RuntimeVariable('flazyInteger', 321)
-						];
-					} else {
-						v.value = parseFloat(value);
-					}
-
-					if (this.variables.has(name)) {
-						// the first write access to a variable is the "declaration" and not a "write access"
-						access = 'write';
-					}
-					this.variables.set(name, v);
-				} else {
-					if (this.variables.has(name)) {
-						// variable must exist in order to trigger a read access
-						access = 'read';
-					}
-				}
 
 				const accessType = this.breakAddresses.get(name);
 				if (access && accessType && accessType.indexOf(access) >= 0) {
 					this.sendEvent('stopOnDataBreakpoint', access);
 					return true;
 				}
+				*/
 			}
 		}
 

@@ -53,7 +53,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	// a Mock runtime (or debugger)
 	private _runtime: MockRuntime;
 
-	private _variableHandles = new Handles<'locals' | 'globals' | RuntimeVariable>();
+	private _variableHandles = new Handles<'locals' | RuntimeVariable>();
 
 	private _configurationDone = new Subject();
 
@@ -171,9 +171,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// make VS Code send the breakpointLocations request
 		response.body.supportsBreakpointLocationsRequest = true;
-
-		// make VS Code provide "Step in Target" functionality
-		response.body.supportsStepInTargetsRequest = true;
 
 		// the adapter defines two exceptions filters, one with support for conditions.
 		response.body.supportsExceptionFilterOptions = true;
@@ -408,8 +405,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		response.body = {
 			scopes: [
-				new Scope("Locals", this._variableHandles.create('locals'), false),
-				new Scope("Globals", this._variableHandles.create('globals'), true)
+				new Scope("Global",this._variableHandles.create('locals'), false)
 			]
 		};
 		this.sendResponse(response);
@@ -460,7 +456,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		const v = this._variableHandles.get(args.variablesReference);
 		if (v === 'locals') {
 			vs = this._runtime.getLocalVariables();
-		} else if (v === 'globals') {
 		} else if (v && Array.isArray(v.value)) {
 			vs = v.value;
 		}
@@ -511,16 +506,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected stepInTargetsRequest(response: DebugProtocol.StepInTargetsResponse, args: DebugProtocol.StepInTargetsArguments) {
-		const targets = this._runtime.getStepInTargets(args.frameId);
-		response.body = {
-			targets: targets.map(t => {
-				return { id: t.id, label: t.label };
-			})
-		};
-		this.sendResponse(response);
-	}
-
 	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
 		this._runtime.stepIn(args.targetId);
 		this.sendResponse(response);
@@ -531,72 +516,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): Promise<void> {
-
-		let reply: string | undefined;
-		let rv: RuntimeVariable | undefined;
-
-		switch (args.context) {
-			case 'repl':
-				// handle some REPL commands:
-				// 'evaluate' supports to create and delete breakpoints from the 'repl':
-				const matches = /new +([0-9]+)/.exec(args.expression);
-				if (matches && matches.length === 2) {
-					const mbp = await this._runtime.setBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-					const bp = new Breakpoint(mbp.verified, this.convertDebuggerLineToClient(mbp.line), undefined, this.createSource(this._runtime.sourceFile)) as DebugProtocol.Breakpoint;
-					bp.id= mbp.id;
-					this.sendEvent(new BreakpointEvent('new', bp));
-					reply = `breakpoint created`;
-				} else {
-					const matches = /del +([0-9]+)/.exec(args.expression);
-					if (matches && matches.length === 2) {
-						const mbp = this._runtime.clearBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-						if (mbp) {
-							const bp = new Breakpoint(false) as DebugProtocol.Breakpoint;
-							bp.id= mbp.id;
-							this.sendEvent(new BreakpointEvent('removed', bp));
-							reply = `breakpoint deleted`;
-						}
-					} else {
-						const matches = /progress/.exec(args.expression);
-						if (matches && matches.length === 1) {
-							if (this._reportProgress) {
-								reply = `progress started`;
-								this.progressSequence();
-							} else {
-								reply = `frontend doesn't support progress (capability 'supportsProgressReporting' not set)`;
-							}
-						}
-					}
-				}
-				// fall through
-
-			default:
-				if (args.expression.startsWith('$')) {
-					rv = this._runtime.getLocalVariable(args.expression.substr(1));
-				} else {
-					rv = new RuntimeVariable('eval', this.convertToRuntime(args.expression));
-				}
-				break;
-		}
-
-		if (rv) {
-			const v = this.convertFromRuntime(rv);
-			response.body = {
-				result: v.value,
-				type: v.type,
-				variablesReference: v.variablesReference,
-				presentationHint: v.presentationHint
-			};
-		} else {
-			response.body = {
-				result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,
-				variablesReference: 0
-			};
-		}
-
-		this.sendResponse(response);
-	}
 
 	protected setExpressionRequest(response: DebugProtocol.SetExpressionResponse, args: DebugProtocol.SetExpressionArguments): void {
 
@@ -666,17 +585,10 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		if (args.variablesReference && args.name) {
 			const v = this._variableHandles.get(args.variablesReference);
-			if (v === 'globals') {
-				response.body.dataId = args.name;
-				response.body.description = args.name;
-				response.body.accessTypes = [ "write" ];
-				response.body.canPersist = true;
-			} else {
-				response.body.dataId = args.name;
-				response.body.description = args.name;
-				response.body.accessTypes = ["read", "write", "readWrite"];
-				response.body.canPersist = true;
-			}
+			response.body.dataId = args.name;
+			response.body.description = args.name;
+			response.body.accessTypes = ["read", "write", "readWrite"];
+			response.body.canPersist = true;
 		}
 
 		this.sendResponse(response);
@@ -837,49 +749,37 @@ export class MockDebugSession extends LoggingDebugSession {
 		let dapVariable: DebugProtocol.Variable = {
 			name: v.name,
 			value: '???',
-			type: typeof v.value,
+			type: v.type || typeof v.value,
 			variablesReference: 0,
 			evaluateName: '$' + v.name
 		};
 
-		if (v.name.indexOf('lazy') >= 0) {
-			// a "lazy" variable needs an additional click to retrieve its value
-
-			dapVariable.value = 'lazy var';		// placeholder value
-			v.reference ??= this._variableHandles.create(new RuntimeVariable('', [ new RuntimeVariable('', v.value) ]));
+		if (Array.isArray(v.value)) {
+			dapVariable.value = `${v.value[0].type} Array (${v.value.length-1})`;
+			v.reference ??= this._variableHandles.create(v);
 			dapVariable.variablesReference = v.reference;
-			dapVariable.presentationHint = { lazy: true };
 		} else {
 
-			if (Array.isArray(v.value)) {
-				dapVariable.value = 'Object';
-				v.reference ??= this._variableHandles.create(v);
-				dapVariable.variablesReference = v.reference;
-			} else {
-
-				switch (typeof v.value) {
-					case 'number':
-						if (Math.round(v.value) === v.value) {
-							dapVariable.value = this.formatNumber(v.value);
-							(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
-							dapVariable.type = 'integer';
-						} else {
-							dapVariable.value = v.value.toString();
-							dapVariable.type = 'float';
-						}
-						break;
-					case 'string':
-						dapVariable.value = `"${v.value}"`;
-						break;
-					case 'boolean':
-						dapVariable.value = v.value ? 'true' : 'false';
-						break;
-					default:
-						dapVariable.value = typeof v.value;
-						break;
-				}
+			switch (typeof v.value) {
+				case 'number':
+					if (Math.round(v.value) === v.value) {
+						dapVariable.value = this.formatNumber(v.value);
+						(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
+						dapVariable.type = 'integer';
+					} else {
+						dapVariable.value = v.value.toString();
+						dapVariable.type = 'float';
+					}
+					break;
+				case 'string':
+					dapVariable.value = `"${v.value}"`;
+					break;
+				default:
+					dapVariable.value = typeof v.value;
+					break;
 			}
 		}
+	
 
 		if (v.memory) {
 			v.reference ??= this._variableHandles.create(v);

@@ -1473,21 +1473,34 @@ Current file: test.asm
 000000r 2               
 000000r 1               
 000000r 1               ; TOKENS:
-000000r 1               	.importzp	TOK_0
 000000r 1               	.importzp	TOK_1
 000000r 1               	.importzp	TOK_ADD_VAR
+000000r 1               	.importzp	TOK_BPUT
 000000r 1               	.importzp	TOK_BYTE
 000000r 1               	.importzp	TOK_BYTE_PUT
+000000r 1               	.importzp	TOK_CJUMP
 000000r 1               	.importzp	TOK_CLOSE
+000000r 1               	.importzp	TOK_CNJUMP
 000000r 1               	.importzp	TOK_COPY_STR
 000000r 1               	.importzp	TOK_CSTRING
 000000r 1               	.importzp	TOK_DIM
+000000r 1               	.importzp	TOK_DPEEK
+000000r 1               	.importzp	TOK_DPOKE
 000000r 1               	.importzp	TOK_END
+000000r 1               	.importzp	TOK_FOR
+000000r 1               	.importzp	TOK_FOR_EXIT
+000000r 1               	.importzp	TOK_FOR_NEXT
 000000r 1               	.importzp	TOK_GETKEY
-000000r 1               	.importzp	TOK_IOCHN
+000000r 1               	.importzp	TOK_INCVAR
+000000r 1               	.importzp	TOK_NUM
 000000r 1               	.importzp	TOK_PRINT_STR
 000000r 1               	.importzp	TOK_PUSH
+000000r 1               	.importzp	TOK_PUSH_1
 000000r 1               	.importzp	TOK_PUSH_BYTE
+000000r 1               	.importzp	TOK_PUSH_NUM
+000000r 1               	.importzp	TOK_SADDR
+000000r 1               	.importzp	TOK_USHL
+000000r 1               	.importzp	TOK_VAR_ADDR
 000000r 1               	.importzp	TOK_VAR_LOAD
 000000r 1               	.importzp	TOK_VAR_SADDR
 000000r 1               	.importzp	TOK_VAR_STORE
@@ -1504,17 +1517,35 @@ Current file: test.asm
 000000r 1  xx xx        fb_var_A:	.res 2	; Word variable
 000002r 1               	.export fb_var_B
 000002r 1  xx xx        fb_var_B:	.res 2	; Word variable
-000004r 1               	.export fb_var_C
-000004r 1  xx xx        fb_var_C:	.res 2	; Word Array variable
-000006r 1               	.export fb_var_D
-000006r 1  xx xx        fb_var_D:	.res 2	; Byte Array variable
-000008r 1               	.export fb_var_HW
-000008r 1  xx xx        fb_var_HW:	.res 2	; String variable
-00000Ar 1               	.export fb_var____DEBUG_KEY
-00000Ar 1  xx xx        fb_var____DEBUG_KEY:	.res 2	; Word variable
-00000Cr 1               ;-----------------------------
-00000Cr 1               ; Bytecode
-00000Cr 1               	.segment "BYTECODE"
+000004r 1               	.export fb_var_C4
+000004r 1  xx xx        fb_var_C4:	.res 2	; Word Array variable
+000006r 1               	.export fb_var_C5
+000006r 1  xx xx        fb_var_C5:	.res 2	; Word Array variable
+000008r 1               	.export fb_var_C6
+000008r 1  xx xx        fb_var_C6:	.res 2	; Word Array variable
+00000Ar 1               	.export fb_var_C5B
+00000Ar 1  xx xx        fb_var_C5B:	.res 2	; Word Array variable
+00000Cr 1               	.export fb_var_D2
+00000Cr 1  xx xx        fb_var_D2:	.res 2	; Byte Array variable
+00000Er 1               	.export fb_var_D3
+00000Er 1  xx xx        fb_var_D3:	.res 2	; Byte Array variable
+000010r 1               	.export fb_var_J4
+000010r 1  xx xx        fb_var_J4:	.res 2	; String Array variable
+000012r 1               	.export fb_var_J5
+000012r 1  xx xx        fb_var_J5:	.res 2	; String Array variable
+000014r 1               	.export fb_var_HW
+000014r 1  xx xx        fb_var_HW:	.res 2	; String variable
+000016r 1               	.export fb_var____DEBUG_BUF
+000016r 1  xx xx        fb_var____DEBUG_BUF:	.res 2	; Word Array variable
+000018r 1               	.export fb_var____DEBUG_VARS
+000018r 1  xx xx        fb_var____DEBUG_VARS:	.res 2	; Word variable
+00001Ar 1               	.export fb_var_I
+00001Ar 1  xx xx        fb_var_I:	.res 2	; Word variable
+00001Cr 1               	.export fb_var____DEBUG_KEY
+00001Cr 1  xx xx        fb_var____DEBUG_KEY:	.res 2	; Word variable
+00001Er 1               ;-----------------------------
+00001Er 1               ; Bytecode
+00001Er 1               	.segment "BYTECODE"
 000000r 1               bytecode_start:
 000000r 1               @FastBasic_LINE_1:	; LINE 1
 000000r 1  rr           	.byte	TOK_1
@@ -1528,71 +1559,203 @@ Current file: test.asm
 000007r 1  rr           	.byte	TOK_VAR_STORE
 000008r 1  rr           	makevar	"B"
 000009r 1               @FastBasic_LINE_3:	; LINE 3
-000009r 1  rr           	.byte	TOK_BYTE
-00000Ar 1  16           	.byte	22
-00000Br 1  rr           	.byte	TOK_DIM
-00000Cr 1  rr           	makevar	"C"
-00000Dr 1               @FastBasic_LINE_4:	; LINE 4
-00000Dr 1  rr           	.byte	TOK_BYTE
-00000Er 1  0B           	.byte	11
-00000Fr 1  rr           	.byte	TOK_DIM
-000010r 1  rr           	makevar	"D"
-000011r 1               @FastBasic_LINE_5:	; LINE 5
-000011r 1  rr           	.byte	TOK_VAR_SADDR
-000012r 1  rr           	makevar	"HW"
-000013r 1  rr           	.byte	TOK_CSTRING
-000014r 1  0B 48 65 6C  	.byte	11, "Hello World"
-000018r 1  6C 6F 20 57  
-00001Cr 1  6F 72 6C 64  
-000020r 1  rr           	.byte	TOK_COPY_STR
-000021r 1               @FastBasic_LINE_7:	; LINE 7
-000021r 1  rr           	.byte	TOK_VAR_LOAD
-000022r 1  rr           	makevar	"HW"
-000023r 1  rr           	.byte	TOK_PRINT_STR
-000024r 1  rr           	.byte	TOK_BYTE_PUT
-000025r 1  9B           	.byte	155
-000026r 1               @FastBasic_LINE_8:	; LINE 8
-000026r 1  rr           	.byte	TOK_BYTE
-000027r 1  05           	.byte	5
-000028r 1  rr           	.byte	TOK_PUSH_BYTE
-000029r 1  03           	.byte	3
-00002Ar 1  rr           	.byte	TOK_PUSH_BYTE
-00002Br 1  08           	.byte	8
-00002Cr 1  rr           	.byte	TOK_PUSH
-00002Dr 1  rr           	.byte	TOK_CSTRING
-00002Er 1  0C 48 36 3A  	.byte	12, "H6:DEBUG.OUT"
-000032r 1  44 45 42 55  
-000036r 1  47 2E 4F 55  
-00003Br 1  rr           	.byte	TOK_XIO
-00003Cr 1               @FastBasic_LINE_10:	; LINE 10
-00003Cr 1  rr           	.byte	TOK_BYTE
-00003Dr 1  05           	.byte	5
-00003Er 1  rr           	.byte	TOK_IOCHN
-00003Fr 1  rr           	.byte	TOK_CSTRING
-000040r 1  12 48 65 6C  	.byte	18, "Hello World=23432", 155
-000044r 1  6C 6F 20 57  
-000048r 1  6F 72 6C 64  
-000053r 1  rr           	.byte	TOK_PRINT_STR
-000054r 1  rr           	.byte	TOK_0
-000055r 1  rr           	.byte	TOK_IOCHN
-000056r 1               @FastBasic_LINE_11:	; LINE 11
-000056r 1  rr           	.byte	TOK_BYTE
-000057r 1  05           	.byte	5
-000058r 1  rr           	.byte	TOK_IOCHN
-000059r 1  rr           	.byte	TOK_CSTRING
-00005Ar 1  11 48 65 6C  	.byte	17, "Hello World=3232", 155
-00005Er 1  6C 6F 20 57  
-000062r 1  6F 72 6C 64  
-00006Cr 1  rr           	.byte	TOK_PRINT_STR
-00006Dr 1  rr           	.byte	TOK_0
-00006Er 1  rr           	.byte	TOK_IOCHN
-00006Fr 1               @FastBasic_LINE_12:	; LINE 12
-00006Fr 1  rr           	.byte	TOK_BYTE
-000070r 1  05           	.byte	5
-000071r 1  rr           	.byte	TOK_CLOSE
-000072r 1               @FastBasic_LINE_14:	; LINE 14
-000072r 1  rr           	.byte	TOK_GETKEY
-000073r 1  rr           	.byte	TOK_VAR_STORE
-000074r 1  rr           	makevar	"___DEBUG_KEY"
-000075r 1  rr           	.byte	TOK_END
-000075r 1               
+000009r 1  rr           	.byte	TOK_CSTRING
+00000Ar 1  04 58 58 58  	.byte	4, "XXX", 155
+00000Er 1  9B           
+00000Fr 1  rr           	.byte	TOK_PRINT_STR
+000010r 1               @FastBasic_LINE_4:	; LINE 4
+000010r 1  rr           	.byte	TOK_BYTE
+000011r 1  08           	.byte	8
+000012r 1  rr           	.byte	TOK_DIM
+000013r 1  rr           	makevar	"C4"
+000014r 1  rr           	.byte	TOK_BYTE
+000015r 1  0A           	.byte	10
+000016r 1  rr           	.byte	TOK_DIM
+000017r 1  rr           	makevar	"C5"
+000018r 1  rr           	.byte	TOK_BYTE
+000019r 1  0C           	.byte	12
+00001Ar 1  rr           	.byte	TOK_DIM
+00001Br 1  rr           	makevar	"C6"
+00001Cr 1  rr           	.byte	TOK_BYTE
+00001Dr 1  0A           	.byte	10
+00001Er 1  rr           	.byte	TOK_DIM
+00001Fr 1  rr           	makevar	"C5B"
+000020r 1               @FastBasic_LINE_7:	; LINE 7
+000020r 1  rr           	.byte	TOK_BYTE
+000021r 1  04           	.byte	4
+000022r 1  rr           	.byte	TOK_ADD_VAR
+000023r 1  rr           	makevar	"C4"
+000024r 1  rr           	.byte	TOK_SADDR
+000025r 1  rr           	.byte	TOK_BYTE
+000026r 1  04           	.byte	4
+000027r 1  rr           	.byte	TOK_DPOKE
+000028r 1               @FastBasic_LINE_9:	; LINE 9
+000028r 1  rr           	.byte	TOK_BYTE
+000029r 1  06           	.byte	6
+00002Ar 1  rr           	.byte	TOK_ADD_VAR
+00002Br 1  rr           	makevar	"C4"
+00002Cr 1  rr           	.byte	TOK_SADDR
+00002Dr 1  rr           	.byte	TOK_BYTE
+00002Er 1  04           	.byte	4
+00002Fr 1  rr           	.byte	TOK_ADD_VAR
+000030r 1  rr           	makevar	"C4"
+000031r 1  rr           	.byte	TOK_DPEEK
+000032r 1  rr           	.byte	TOK_USHL
+000033r 1  rr           	.byte	TOK_DPOKE
+000034r 1               @FastBasic_LINE_11:	; LINE 11
+000034r 1  rr           	.byte	TOK_CSTRING
+000035r 1  04 58 58 58  	.byte	4, "XXX", 155
+000039r 1  9B           
+00003Ar 1  rr           	.byte	TOK_PRINT_STR
+00003Br 1               @FastBasic_LINE_12:	; LINE 12
+00003Br 1  rr           	.byte	TOK_BYTE
+00003Cr 1  02           	.byte	2
+00003Dr 1  rr           	.byte	TOK_DIM
+00003Er 1  rr           	makevar	"D2"
+00003Fr 1  rr           	.byte	TOK_BYTE
+000040r 1  03           	.byte	3
+000041r 1  rr           	.byte	TOK_DIM
+000042r 1  rr           	makevar	"D3"
+000043r 1               @FastBasic_LINE_13:	; LINE 13
+000043r 1  rr           	.byte	TOK_CSTRING
+000044r 1  04 58 58 58  	.byte	4, "XXX", 155
+000048r 1  9B           
+000049r 1  rr           	.byte	TOK_PRINT_STR
+00004Ar 1               @FastBasic_LINE_14:	; LINE 14
+00004Ar 1  rr           	.byte	TOK_BYTE
+00004Br 1  08           	.byte	8
+00004Cr 1  rr           	.byte	TOK_DIM
+00004Dr 1  rr           	makevar	"J4"
+00004Er 1  rr           	.byte	TOK_BYTE
+00004Fr 1  0A           	.byte	10
+000050r 1  rr           	.byte	TOK_DIM
+000051r 1  rr           	makevar	"J5"
+000052r 1               @FastBasic_LINE_15:	; LINE 15
+000052r 1  rr           	.byte	TOK_CSTRING
+000053r 1  04 58 58 58  	.byte	4, "XXX", 155
+000057r 1  9B           
+000058r 1  rr           	.byte	TOK_PRINT_STR
+000059r 1               @FastBasic_LINE_16:	; LINE 16
+000059r 1  rr           	.byte	TOK_VAR_SADDR
+00005Ar 1  rr           	makevar	"HW"
+00005Br 1  rr           	.byte	TOK_CSTRING
+00005Cr 1  0B 48 65 6C  	.byte	11, "Hello World"
+000060r 1  6C 6F 20 57  
+000064r 1  6F 72 6C 64  
+000068r 1  rr           	.byte	TOK_COPY_STR
+000069r 1               @FastBasic_LINE_17:	; LINE 17
+000069r 1  rr           	.byte	TOK_VAR_LOAD
+00006Ar 1  rr           	makevar	"HW"
+00006Br 1  rr           	.byte	TOK_PRINT_STR
+00006Cr 1  rr           	.byte	TOK_BYTE_PUT
+00006Dr 1  9B           	.byte	155
+00006Er 1               @FastBasic_LINE_18:	; LINE 18
+00006Er 1  rr           	.byte	TOK_BYTE
+00006Fr 1  05           	.byte	5
+000070r 1  rr           	.byte	TOK_PUSH_BYTE
+000071r 1  03           	.byte	3
+000072r 1  rr           	.byte	TOK_PUSH_BYTE
+000073r 1  08           	.byte	8
+000074r 1  rr           	.byte	TOK_PUSH
+000075r 1  rr           	.byte	TOK_CSTRING
+000076r 1  0C 48 36 3A  	.byte	12, "H6:DEBUG.OUT"
+00007Ar 1  44 45 42 55  
+00007Er 1  47 2E 4F 55  
+000083r 1  rr           	.byte	TOK_XIO
+000084r 1               @FastBasic_LINE_20:	; LINE 20
+000084r 1  rr           	.byte	TOK_NUM
+000085r 1  A2 0F        	.word	4002
+000087r 1  rr           	.byte	TOK_DIM
+000088r 1  rr           	makevar	"___DEBUG_BUF"
+000089r 1               @FastBasic_LINE_21:	; LINE 21
+000089r 1  rr           	.byte	TOK_VAR_LOAD
+00008Ar 1  rr           	makevar	"___DEBUG_BUF"
+00008Br 1  rr           	.byte	TOK_VAR_STORE
+00008Cr 1  rr           	makevar	"___DEBUG_VARS"
+00008Dr 1               @FastBasic_LINE_22:	; LINE 22
+00008Dr 1  rr           	.byte	TOK_VAR_LOAD
+00008Er 1  rr           	makevar	"___DEBUG_VARS"
+00008Fr 1  rr           	.byte	TOK_SADDR
+000090r 1  rr           	.byte	TOK_VAR_ADDR
+000091r 1  rr           	makevar	"A"
+000092r 1  rr           	.byte	TOK_DPOKE
+000093r 1  rr           	.byte	TOK_VAR_LOAD
+000094r 1  rr           	makevar	"___DEBUG_VARS"
+000095r 1  rr           	.byte	TOK_SADDR
+000096r 1  rr           	.byte	TOK_BYTE
+000097r 1  16           	.byte	22
+000098r 1  rr           	.byte	TOK_DPOKE
+000099r 1  rr           	.byte	TOK_INCVAR
+00009Ar 1  rr           	makevar	"___DEBUG_VARS"
+00009Br 1               @FastBasic_LINE_23:	; LINE 23
+00009Br 1  rr           	.byte	TOK_VAR_LOAD
+00009Cr 1  rr           	makevar	"___DEBUG_VARS"
+00009Dr 1  rr           	.byte	TOK_SADDR
+00009Er 1  rr           	.byte	TOK_VAR_LOAD
+00009Fr 1  rr           	makevar	"C4"
+0000A0r 1  rr           	.byte	TOK_DPOKE
+0000A1r 1  rr           	.byte	TOK_VAR_LOAD
+0000A2r 1  rr           	makevar	"___DEBUG_VARS"
+0000A3r 1  rr           	.byte	TOK_SADDR
+0000A4r 1  rr           	.byte	TOK_BYTE
+0000A5r 1  08           	.byte	8
+0000A6r 1  rr           	.byte	TOK_DPOKE
+0000A7r 1  rr           	.byte	TOK_INCVAR
+0000A8r 1  rr           	makevar	"___DEBUG_VARS"
+0000A9r 1               @FastBasic_LINE_24:	; LINE 24
+0000A9r 1  rr           	.byte	TOK_VAR_LOAD
+0000AAr 1  rr           	makevar	"___DEBUG_VARS"
+0000ABr 1  rr           	.byte	TOK_SADDR
+0000ACr 1  rr           	.byte	TOK_VAR_LOAD
+0000ADr 1  rr           	makevar	"C5"
+0000AEr 1  rr           	.byte	TOK_DPOKE
+0000AFr 1  rr           	.byte	TOK_VAR_LOAD
+0000B0r 1  rr           	makevar	"___DEBUG_VARS"
+0000B1r 1  rr           	.byte	TOK_SADDR
+0000B2r 1  rr           	.byte	TOK_BYTE
+0000B3r 1  0A           	.byte	10
+0000B4r 1  rr           	.byte	TOK_DPOKE
+0000B5r 1  rr           	.byte	TOK_INCVAR
+0000B6r 1  rr           	makevar	"___DEBUG_VARS"
+0000B7r 1               @FastBasic_LINE_26:	; LINE 26
+0000B7r 1  rr           	.byte	TOK_VAR_SADDR
+0000B8r 1  rr           	makevar	"I"
+0000B9r 1  rr           	.byte	TOK_PUSH_1
+0000BAr 1  rr           	.byte	TOK_DPOKE
+0000BBr 1  rr           	.byte	TOK_BYTE
+0000BCr 1  64           	.byte	100
+0000BDr 1  rr           	.byte	TOK_PUSH_1
+0000BEr 1  rr           	.byte	TOK_FOR
+0000BFr 1  rr           	.byte	TOK_CNJUMP
+0000C0r 1  rr rr        	.word	jump_lbl_1
+0000C2r 1               jump_lbl_2:
+0000C2r 1               @FastBasic_LINE_27:	; LINE 27
+0000C2r 1  rr           	.byte	TOK_BYTE
+0000C3r 1  05           	.byte	5
+0000C4r 1  rr           	.byte	TOK_PUSH
+0000C5r 1  rr           	.byte	TOK_VAR_ADDR
+0000C6r 1  rr           	makevar	"A"
+0000C7r 1  rr           	.byte	TOK_PUSH_NUM
+0000C8r 1  00 01        	.word	256
+0000CAr 1  rr           	.byte	TOK_BPUT
+0000CBr 1               @FastBasic_LINE_28:	; LINE 28
+0000CBr 1  rr           	.byte	TOK_FOR_NEXT
+0000CCr 1  rr           	.byte	TOK_CJUMP
+0000CDr 1  rr rr        	.word	jump_lbl_2
+0000CFr 1               jump_lbl_1:
+0000CFr 1  rr           	.byte	TOK_FOR_EXIT
+0000D0r 1               @FastBasic_LINE_31:	; LINE 31
+0000D0r 1  rr           	.byte	TOK_BYTE
+0000D1r 1  05           	.byte	5
+0000D2r 1  rr           	.byte	TOK_CLOSE
+0000D3r 1               @FastBasic_LINE_32:	; LINE 32
+0000D3r 1  rr           	.byte	TOK_CSTRING
+0000D4r 1  06 77 72 6F  	.byte	6, "wrote", 155
+0000D8r 1  74 65 9B     
+0000DBr 1  rr           	.byte	TOK_PRINT_STR
+0000DCr 1               @FastBasic_LINE_33:	; LINE 33
+0000DCr 1  rr           	.byte	TOK_GETKEY
+0000DDr 1  rr           	.byte	TOK_VAR_STORE
+0000DEr 1  rr           	makevar	"___DEBUG_KEY"
+0000DFr 1  rr           	.byte	TOK_END
+0000DFr 1               
