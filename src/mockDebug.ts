@@ -284,34 +284,41 @@ export class MockDebugSession extends LoggingDebugSession {
 		};
 		
 		// Copy the source file to the bin folder 
-		vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder+folderDelimiter+ filename));
+		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder+folderDelimiter+filename));
     
 		// Check if the compiler exists
 		if (!this._fileAccessor.doesFileExist(args.compilerPath)) {
-			return vscode.window.showErrorMessage("Could not find FastBasic compiler. Check launch.json.").then(_ => {
-				return undefined;	// abort launch
-			});
+			response.success = false;
+			response.message = "Could not find FastBasic compiler. Check the compilerPath in launch.json.";
+			this.sendResponse(response);
+			return undefined;
 		}
 
 		// run the fastbasic compiler
+		fastBasicChannel.clear();
 		fastBasicChannel.show(true);
-		//fastBasicChannel.sendText(`@ECHO Compiling ${filename} using FastBasic Compiler..`);
-		fastBasicChannel.sendText(`cd \"${binFolder}\"`);
-		fastBasicChannel.sendText(`${args.compilerPath} \"${filename}\"`);
-		
-		let atariExecutable = binFolder+folderDelimiter+filenameNoExt+"xex";
+		fastBasicChannel.appendLine(`Compiling ${filename} using FastBasic Compiler..`);
 
-		var sucessful = await this._fileAccessor.waitUntilFileExists(atariExecutable, 10000);
-		
-
-		/*   let exec = cp.execFile(args.compilerPath,[ "\"" + file + "\""], (err, stdout, stderr) => {
-			fastBasicChannel.appendLine(stdout);
-			fastBasicChannel.appendLine(stderr);
+		cp.execFile(`${args.compilerPath}`,[ filename ], { cwd:binFolder+folderDelimiter}, (err, stdout) => {
 			if (err) {
-				fastBasicChannel.appendLine('error: ' + err);
-				return undefined; // abort launch
+				fastBasicChannel.appendLine(err.message.substring(err.message.indexOf("\n")));
 			}
-		});*/
+			fastBasicChannel.appendLine(stdout);
+		});
+			
+
+		//var output = await execShell(`${args.compilerPath}`);// \"${binFolder+folderDelimiter+filename}\"`);
+		//fastBasicChannel.appendLine(output);
+	
+		let atariExecutable = binFolder+folderDelimiter+filenameNoExt+"xex";
+		if (!this._fileAccessor.doesFileExist(atariExecutable)) {
+			response.success = false;
+			this.sendErrorResponse(response, { 
+				id: 1001,
+				format: `Unable to compile source file.`,//, 
+				showUser: false});
+			return undefined;	// abort launch
+		}
 		
 		//let options: any = isWindows ? { shell: true, StdioOptions:"pipe" } : undefined;
 		//let output = cp.execFileSync(args.compilerPath,[ "\"" + file + "\""]);
@@ -321,9 +328,10 @@ export class MockDebugSession extends LoggingDebugSession {
 		
 
 		if (!this._fileAccessor.doesFileExist(args.emulatorPath)) {
-			return vscode.window.showErrorMessage("Could not find Atari Emulator. Check launch.json.").then(_ => {
-				return undefined;	// abort launch
-			});
+			response.success = false;
+			response.message = "Could not find Atari Emulator. Check the emulatorPath in launch.json.";
+			this.sendResponse(response);
+			return undefined;
 		}
 
 

@@ -12,11 +12,13 @@ import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken 
 import { MockDebugSession } from './mockDebug';
 import { FileAccessor } from './mockRuntime';
 
-export let fastBasicChannel: vscode.Terminal;
+//export let fastBasicChannel: vscode.Terminal;
+export let fastBasicChannel: vscode.OutputChannel;
 
 export function activateMockDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
 
-	fastBasicChannel = vscode.window.createTerminal("FastBasic");
+	//fastBasicChannel = vscode.window.createTerminal("FastBasic");
+	fastBasicChannel = vscode.window.createOutputChannel("FastBasic");
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.fastbasic-debugger.runEditorContents', (resource: vscode.Uri) => {
@@ -196,8 +198,9 @@ export const workspaceFileAccessor: FileAccessor = {
 	async writeFile(path: string, contents: Uint8Array) {
 		await vscode.workspace.fs.writeFile(pathToUri(path), contents);
 	}, 
-	async waitUntilFileDoesNotExist(path: string, timeoutMs?: number) {
+	async waitUntilFileDoesNotExist(path: string) {
 		let waitedMs=0;
+		//timeoutMs= timeoutMs || 0;
 		while (true) {
 			try {
 				let uri = vscode.Uri.file(path);
@@ -207,10 +210,10 @@ export const workspaceFileAccessor: FileAccessor = {
 				return true;
 			}
 			await new Promise(resolve => setTimeout(resolve, 125));
-			waitedMs+=125;
-			if (timeoutMs && waitedMs>=timeoutMs) {
-				return false;
-			}
+			//waitedMs+=125;
+			//if (timeoutMs && waitedMs>=timeoutMs) {
+				//return false;
+			//}
 		}
 	},
 	async waitUntilFileExists(path: string, timeoutMs?: number) {

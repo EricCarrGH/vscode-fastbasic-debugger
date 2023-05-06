@@ -1862,26 +1862,26 @@ Current file: test.asm
 000150r 1  rr           	makevar	"___DEBUG_KEY"
 000151r 1               @FastBasic_LINE_42:	; LINE 42
 000151r 1  rr           	.byte	TOK_END
-000152r 1               @FastBasic_LINE_47:	; LINE 47
+000152r 1               @FastBasic_LINE_45:	; LINE 45
 000152r 1               	.segment "BYTECODE"
 000152r 1               	.export	fb_lbl____DEBUG_BP
 000152r 1               fb_lbl____DEBUG_BP:
 000152r 1  rr           	.byte	TOK_POP
 000153r 1  rr           	.byte	TOK_VAR_STORE
 000154r 1  rr           	makevar	"___DEBUG_LINE"
-000155r 1               @FastBasic_LINE_48:	; LINE 48
+000155r 1               @FastBasic_LINE_46:	; LINE 46
 000155r 1  rr           	.byte	TOK_CSTRING
 000156r 1  0D 5B 42 52  	.byte	13, "[BREAKPOINT]", 155
 00015Ar 1  45 41 4B 50  
 00015Er 1  4F 49 4E 54  
 000164r 1  rr           	.byte	TOK_PRINT_STR
-000165r 1               @FastBasic_LINE_50:	; LINE 50
+000165r 1               @FastBasic_LINE_48:	; LINE 48
 000165r 1  rr           	.byte	TOK_BYTE
 000166r 1  05           	.byte	5
 000167r 1  rr           	.byte	TOK_CLOSE
-000168r 1               @FastBasic_LINE_51:	; LINE 51
+000168r 1               @FastBasic_LINE_49:	; LINE 49
 000168r 1               jump_lbl_7:
-000168r 1               @FastBasic_LINE_52:	; LINE 52
+000168r 1               @FastBasic_LINE_50:	; LINE 50
 000168r 1  rr           	.byte	TOK_BYTE
 000169r 1  05           	.byte	5
 00016Ar 1  rr           	.byte	TOK_PUSH_BYTE
@@ -1894,14 +1894,14 @@ Current file: test.asm
 000174r 1  64 65 62 75  
 000178r 1  67 2E 69 6E  
 00017Cr 1  rr           	.byte	TOK_XIO
-00017Dr 1               @FastBasic_LINE_53:	; LINE 53
+00017Dr 1               @FastBasic_LINE_51:	; LINE 51
 00017Dr 1  rr           	.byte	TOK_BYTE_PEEK
 00017Er 1  rr           	.byte	IOERROR
 00017Fr 1  rr           	.byte	TOK_PUSH_1
 000180r 1  rr           	.byte	TOK_EQ
 000181r 1  rr           	.byte	TOK_CJUMP
 000182r 1  rr rr        	.word	jump_lbl_8
-000184r 1               @FastBasic_LINE_54:	; LINE 54
+000184r 1               @FastBasic_LINE_52:	; LINE 52
 000184r 1  rr           	.byte	TOK_BYTE
 000185r 1  05           	.byte	5
 000186r 1  rr           	.byte	TOK_IOCHN
@@ -1910,7 +1910,7 @@ Current file: test.asm
 000189r 1  rr           	makevar	"___DEBUG_MODE"
 00018Ar 1  rr           	.byte	TOK_0
 00018Br 1  rr           	.byte	TOK_IOCHN
-00018Cr 1               @FastBasic_LINE_55:	; LINE 55
+00018Cr 1               @FastBasic_LINE_53:	; LINE 53
 00018Cr 1  rr           	.byte	TOK_CSTRING
 00018Dr 1  0C 5B 44 45  	.byte	12, "[DEBUG MODE "
 000191r 1  42 55 47 20  
@@ -1920,7 +1920,7 @@ Current file: test.asm
 00019Cr 1  rr           	makevar	"___DEBUG_MODE"
 00019Dr 1  rr           	.byte	TOK_INT_STR
 00019Er 1  rr           	.byte	TOK_PRINT_STR
-00019Fr 1               @FastBasic_LINE_56:	; LINE 56
+00019Fr 1               @FastBasic_LINE_54:	; LINE 54
 00019Fr 1  rr           	.byte	TOK_BYTE_PUT
 0001A0r 1  5D           	.byte	93
 0001A1r 1  rr           	.byte	TOK_BYTE_PUT
@@ -1937,7 +1937,7 @@ Current file: test.asm
 0001ACr 1  rr           	.byte	TOK_L_OR
 0001ADr 1  rr           	.byte	TOK_CNJUMP
 0001AEr 1  rr rr        	.word	jump_lbl_7_x
-0001B0r 1               @FastBasic_LINE_58:	; LINE 58
+0001B0r 1               @FastBasic_LINE_56:	; LINE 56
 0001B0r 1  rr           	.byte	TOK_VAR_LOAD
 0001B1r 1  rr           	makevar	"___DEBUG_MODE"
 0001B2r 1  rr           	.byte	TOK_PUSH_BYTE
@@ -1945,7 +1945,7 @@ Current file: test.asm
 0001B4r 1  rr           	.byte	TOK_EQ
 0001B5r 1  rr           	.byte	TOK_CJUMP
 0001B6r 1  rr rr        	.word	jump_lbl_10
-0001B8r 1               @FastBasic_LINE_60:	; LINE 60
+0001B8r 1               @FastBasic_LINE_58:	; LINE 58
 0001B8r 1  rr           	.byte	TOK_BYTE
 0001B9r 1  04           	.byte	4
 0001BAr 1  rr           	.byte	TOK_CLOSE
@@ -1961,9 +1961,9 @@ Current file: test.asm
 0001C7r 1  64 65 62 75  
 0001CBr 1  67 2E 6F 75  
 0001D0r 1  rr           	.byte	TOK_XIO
-0001D1r 1               @FastBasic_LINE_61:	; LINE 61
+0001D1r 1               @FastBasic_LINE_59:	; LINE 59
 0001D1r 1               jump_lbl_11:
-0001D1r 1               @FastBasic_LINE_63:	; LINE 63
+0001D1r 1               @FastBasic_LINE_61:	; LINE 61
 0001D1r 1  rr           	.byte	TOK_VAR_STORE_0
 0001D2r 1  rr           	makevar	"___DEBUG_MEM"
 0001D3r 1  rr           	.byte	TOK_BYTE
@@ -1979,12 +1979,12 @@ Current file: test.asm
 0001DDr 1  rr           	.byte	TOK_COMP_0
 0001DEr 1  rr           	.byte	TOK_CJUMP
 0001DFr 1  rr rr        	.word	jump_lbl_11_x
-0001E1r 1               @FastBasic_LINE_68:	; LINE 68
+0001E1r 1               @FastBasic_LINE_66:	; LINE 66
 0001E1r 1  rr           	.byte	TOK_VAR_LOAD
 0001E2r 1  rr           	makevar	"___DEBUG_MEM"
 0001E3r 1  rr           	.byte	TOK_VAR_STORE
 0001E4r 1  rr           	makevar	"___DEBUG_MEMO"
-0001E5r 1               @FastBasic_LINE_69:	; LINE 69
+0001E5r 1               @FastBasic_LINE_67:	; LINE 67
 0001E5r 1  rr           	.byte	TOK_VAR_LOAD
 0001E6r 1  rr           	makevar	"___DEBUG_MODE"
 0001E7r 1  rr           	.byte	TOK_PUSH_NUM
@@ -1998,12 +1998,12 @@ Current file: test.asm
 0001F1r 1  rr           	.byte	TOK_VAR_STORE
 0001F2r 1  rr           	makevar	"___DEBUG_MEM"
 0001F3r 1               jump_lbl_13:
-0001F3r 1               @FastBasic_LINE_70:	; LINE 70
+0001F3r 1               @FastBasic_LINE_68:	; LINE 68
 0001F3r 1  rr           	.byte	TOK_NUM
 0001F4r 1  EA 03        	.word	1002
 0001F6r 1  rr           	.byte	TOK_VAR_STORE
 0001F7r 1  rr           	makevar	"___DEBUG_MODE"
-0001F8r 1               @FastBasic_LINE_73:	; LINE 73
+0001F8r 1               @FastBasic_LINE_71:	; LINE 71
 0001F8r 1  rr           	.byte	TOK_VAR_LOAD
 0001F9r 1  rr           	makevar	"___DEBUG_LEN"
 0001FAr 1  rr           	.byte	TOK_PUSH_NUM
@@ -2019,7 +2019,7 @@ Current file: test.asm
 000206r 1  rr           	.byte	TOK_L_AND
 000207r 1  rr           	.byte	TOK_CJUMP
 000208r 1  rr rr        	.word	jump_lbl_14
-00020Ar 1               @FastBasic_LINE_74:	; LINE 74
+00020Ar 1               @FastBasic_LINE_72:	; LINE 72
 00020Ar 1               jump_lbl_15:
 00020Ar 1  rr           	.byte	TOK_VAR_LOAD
 00020Br 1  rr           	makevar	"___DEBUG_LEN"
@@ -2027,7 +2027,7 @@ Current file: test.asm
 00020Dr 1  rr           	.byte	TOK_GT
 00020Er 1  rr           	.byte	TOK_CJUMP
 00020Fr 1  rr rr        	.word	jump_lbl_11
-000211r 1               @FastBasic_LINE_76:	; LINE 76
+000211r 1               @FastBasic_LINE_74:	; LINE 74
 000211r 1  rr           	.byte	TOK_BYTE
 000212r 1  04           	.byte	4
 000213r 1  rr           	.byte	TOK_PUSH_VAR_LOAD
@@ -2036,12 +2036,12 @@ Current file: test.asm
 000216r 1  rr           	.byte	TOK_PUSH_NUM
 000217r 1  00 01        	.word	256
 000219r 1  rr           	.byte	TOK_BPUT
-00021Ar 1               @FastBasic_LINE_77:	; LINE 77
+00021Ar 1               @FastBasic_LINE_75:	; LINE 75
 00021Ar 1  rr           	.byte	TOK_INCVAR
 00021Br 1  rr           	makevar	"___DEBUG_MEM"
 00021Cr 1  rr           	.byte	TOK_INCVAR
 00021Dr 1  rr           	makevar	"___DEBUG_MEM"
-00021Er 1               @FastBasic_LINE_78:	; LINE 78
+00021Er 1               @FastBasic_LINE_76:	; LINE 76
 00021Er 1  rr           	.byte	TOK_VAR_LOAD
 00021Fr 1  rr           	makevar	"___DEBUG_LEN"
 000220r 1  rr           	.byte	TOK_PUSH_NUM
@@ -2049,12 +2049,12 @@ Current file: test.asm
 000223r 1  rr           	.byte	TOK_SUB
 000224r 1  rr           	.byte	TOK_VAR_STORE
 000225r 1  rr           	makevar	"___DEBUG_LEN"
-000226r 1               @FastBasic_LINE_79:	; LINE 79
+000226r 1               @FastBasic_LINE_77:	; LINE 77
 000226r 1  rr           	.byte	TOK_JUMP
 000227r 1  rr rr        	.word	jump_lbl_15
-000229r 1               @FastBasic_LINE_80:	; LINE 80
+000229r 1               @FastBasic_LINE_78:	; LINE 78
 000229r 1               jump_lbl_14:
-000229r 1               @FastBasic_LINE_82:	; LINE 82
+000229r 1               @FastBasic_LINE_80:	; LINE 80
 000229r 1  rr           	.byte	TOK_BYTE
 00022Ar 1  04           	.byte	4
 00022Br 1  rr           	.byte	TOK_PUSH_VAR_LOAD
@@ -2062,15 +2062,15 @@ Current file: test.asm
 00022Dr 1  rr           	.byte	TOK_PUSH_VAR_LOAD
 00022Er 1  rr           	makevar	"___DEBUG_LEN"
 00022Fr 1  rr           	.byte	TOK_BPUT
-000230r 1               @FastBasic_LINE_90:	; LINE 90
+000230r 1               @FastBasic_LINE_88:	; LINE 88
 000230r 1  rr           	.byte	TOK_JUMP
 000231r 1  rr rr        	.word	jump_lbl_11
 000233r 1               jump_lbl_11_x:
-000233r 1               @FastBasic_LINE_91:	; LINE 91
+000233r 1               @FastBasic_LINE_89:	; LINE 89
 000233r 1  rr           	.byte	TOK_BYTE
 000234r 1  04           	.byte	4
 000235r 1  rr           	.byte	TOK_CLOSE
-000236r 1               @FastBasic_LINE_92:	; LINE 92
+000236r 1               @FastBasic_LINE_90:	; LINE 90
 000236r 1  rr           	.byte	TOK_JUMP
 000237r 1  rr rr        	.word	jump_lbl_18
 000239r 1               jump_lbl_10:
@@ -2081,13 +2081,13 @@ Current file: test.asm
 00023Dr 1  rr           	.byte	TOK_EQ
 00023Er 1  rr           	.byte	TOK_CJUMP
 00023Fr 1  rr rr        	.word	jump_lbl_18
-000241r 1               @FastBasic_LINE_94:	; LINE 94
+000241r 1               @FastBasic_LINE_92:	; LINE 92
 000241r 1               jump_lbl_18:
-000241r 1               @FastBasic_LINE_95:	; LINE 95
+000241r 1               @FastBasic_LINE_93:	; LINE 93
 000241r 1  rr           	.byte	TOK_BYTE
 000242r 1  05           	.byte	5
 000243r 1  rr           	.byte	TOK_CLOSE
-000244r 1               @FastBasic_LINE_96:	; LINE 96
+000244r 1               @FastBasic_LINE_94:	; LINE 94
 000244r 1  rr           	.byte	TOK_BYTE
 000245r 1  05           	.byte	5
 000246r 1  rr           	.byte	TOK_PUSH_BYTE
@@ -2099,22 +2099,22 @@ Current file: test.asm
 00024Fr 1  64 65 62 75  
 000253r 1  67 2E 69 6E  
 000257r 1  rr           	.byte	TOK_XIO
-000258r 1               @FastBasic_LINE_98:	; LINE 98
+000258r 1               @FastBasic_LINE_96:	; LINE 96
 000258r 1               jump_lbl_8:
-000258r 1               @FastBasic_LINE_99:	; LINE 99
+000258r 1               @FastBasic_LINE_97:	; LINE 97
 000258r 1  rr           	.byte	TOK_BYTE
 000259r 1  0A           	.byte	10
 00025Ar 1  rr           	.byte	TOK_PAUSE
-00025Br 1               @FastBasic_LINE_100:	; LINE 100
+00025Br 1               @FastBasic_LINE_98:	; LINE 98
 00025Br 1  rr           	.byte	TOK_JUMP
 00025Cr 1  rr rr        	.word	jump_lbl_7
 00025Er 1               jump_lbl_7_x:
-00025Er 1               @FastBasic_LINE_102:	; LINE 102
+00025Er 1               @FastBasic_LINE_100:	; LINE 100
 00025Er 1  rr           	.byte	TOK_CSTRING
 00025Fr 1  09 5B 52 45  	.byte	9, "[RESUME]", 155
 000263r 1  53 55 4D 45  
 000267r 1  5D 9B        
 000269r 1  rr           	.byte	TOK_PRINT_STR
-00026Ar 1               @FastBasic_LINE_103:	; LINE 103
+00026Ar 1               @FastBasic_LINE_101:	; LINE 101
 00026Ar 1  rr           	.byte	TOK_RET
 00026Ar 1               

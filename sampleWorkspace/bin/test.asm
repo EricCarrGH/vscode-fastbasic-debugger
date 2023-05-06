@@ -377,24 +377,24 @@ jump_lbl_1:
 	makevar	"___DEBUG_KEY"
 @FastBasic_LINE_42:	; LINE 42
 	.byte	TOK_END
-@FastBasic_LINE_47:	; LINE 47
+@FastBasic_LINE_45:	; LINE 45
 	.segment "BYTECODE"
 	.export	fb_lbl____DEBUG_BP
 fb_lbl____DEBUG_BP:
 	.byte	TOK_POP
 	.byte	TOK_VAR_STORE
 	makevar	"___DEBUG_LINE"
-@FastBasic_LINE_48:	; LINE 48
+@FastBasic_LINE_46:	; LINE 46
 	.byte	TOK_CSTRING
 	.byte	13, "[BREAKPOINT]", 155
 	.byte	TOK_PRINT_STR
-@FastBasic_LINE_50:	; LINE 50
+@FastBasic_LINE_48:	; LINE 48
 	.byte	TOK_BYTE
 	.byte	5
 	.byte	TOK_CLOSE
-@FastBasic_LINE_51:	; LINE 51
+@FastBasic_LINE_49:	; LINE 49
 jump_lbl_7:
-@FastBasic_LINE_52:	; LINE 52
+@FastBasic_LINE_50:	; LINE 50
 	.byte	TOK_BYTE
 	.byte	5
 	.byte	TOK_PUSH_BYTE
@@ -405,14 +405,14 @@ jump_lbl_7:
 	.byte	TOK_CSTRING
 	.byte	11, "H4:debug.in"
 	.byte	TOK_XIO
-@FastBasic_LINE_53:	; LINE 53
+@FastBasic_LINE_51:	; LINE 51
 	.byte	TOK_BYTE_PEEK
 	.byte	IOERROR
 	.byte	TOK_PUSH_1
 	.byte	TOK_EQ
 	.byte	TOK_CJUMP
 	.word	jump_lbl_8
-@FastBasic_LINE_54:	; LINE 54
+@FastBasic_LINE_52:	; LINE 52
 	.byte	TOK_BYTE
 	.byte	5
 	.byte	TOK_IOCHN
@@ -421,7 +421,7 @@ jump_lbl_7:
 	makevar	"___DEBUG_MODE"
 	.byte	TOK_0
 	.byte	TOK_IOCHN
-@FastBasic_LINE_55:	; LINE 55
+@FastBasic_LINE_53:	; LINE 53
 	.byte	TOK_CSTRING
 	.byte	12, "[DEBUG MODE "
 	.byte	TOK_PRINT_STR
@@ -429,7 +429,7 @@ jump_lbl_7:
 	makevar	"___DEBUG_MODE"
 	.byte	TOK_INT_STR
 	.byte	TOK_PRINT_STR
-@FastBasic_LINE_56:	; LINE 56
+@FastBasic_LINE_54:	; LINE 54
 	.byte	TOK_BYTE_PUT
 	.byte	93
 	.byte	TOK_BYTE_PUT
@@ -446,7 +446,7 @@ jump_lbl_7:
 	.byte	TOK_L_OR
 	.byte	TOK_CNJUMP
 	.word	jump_lbl_7_x
-@FastBasic_LINE_58:	; LINE 58
+@FastBasic_LINE_56:	; LINE 56
 	.byte	TOK_VAR_LOAD
 	makevar	"___DEBUG_MODE"
 	.byte	TOK_PUSH_BYTE
@@ -454,7 +454,7 @@ jump_lbl_7:
 	.byte	TOK_EQ
 	.byte	TOK_CJUMP
 	.word	jump_lbl_10
-@FastBasic_LINE_60:	; LINE 60
+@FastBasic_LINE_58:	; LINE 58
 	.byte	TOK_BYTE
 	.byte	4
 	.byte	TOK_CLOSE
@@ -468,9 +468,9 @@ jump_lbl_7:
 	.byte	TOK_CSTRING
 	.byte	12, "H4:debug.out"
 	.byte	TOK_XIO
-@FastBasic_LINE_61:	; LINE 61
+@FastBasic_LINE_59:	; LINE 59
 jump_lbl_11:
-@FastBasic_LINE_63:	; LINE 63
+@FastBasic_LINE_61:	; LINE 61
 	.byte	TOK_VAR_STORE_0
 	makevar	"___DEBUG_MEM"
 	.byte	TOK_BYTE
@@ -486,12 +486,12 @@ jump_lbl_11:
 	.byte	TOK_COMP_0
 	.byte	TOK_CJUMP
 	.word	jump_lbl_11_x
-@FastBasic_LINE_68:	; LINE 68
+@FastBasic_LINE_66:	; LINE 66
 	.byte	TOK_VAR_LOAD
 	makevar	"___DEBUG_MEM"
 	.byte	TOK_VAR_STORE
 	makevar	"___DEBUG_MEMO"
-@FastBasic_LINE_69:	; LINE 69
+@FastBasic_LINE_67:	; LINE 67
 	.byte	TOK_VAR_LOAD
 	makevar	"___DEBUG_MODE"
 	.byte	TOK_PUSH_NUM
@@ -505,12 +505,12 @@ jump_lbl_11:
 	.byte	TOK_VAR_STORE
 	makevar	"___DEBUG_MEM"
 jump_lbl_13:
-@FastBasic_LINE_70:	; LINE 70
+@FastBasic_LINE_68:	; LINE 68
 	.byte	TOK_NUM
 	.word	1002
 	.byte	TOK_VAR_STORE
 	makevar	"___DEBUG_MODE"
-@FastBasic_LINE_73:	; LINE 73
+@FastBasic_LINE_71:	; LINE 71
 	.byte	TOK_VAR_LOAD
 	makevar	"___DEBUG_LEN"
 	.byte	TOK_PUSH_NUM
@@ -526,7 +526,7 @@ jump_lbl_13:
 	.byte	TOK_L_AND
 	.byte	TOK_CJUMP
 	.word	jump_lbl_14
-@FastBasic_LINE_74:	; LINE 74
+@FastBasic_LINE_72:	; LINE 72
 jump_lbl_15:
 	.byte	TOK_VAR_LOAD
 	makevar	"___DEBUG_LEN"
@@ -534,7 +534,7 @@ jump_lbl_15:
 	.byte	TOK_GT
 	.byte	TOK_CJUMP
 	.word	jump_lbl_11
-@FastBasic_LINE_76:	; LINE 76
+@FastBasic_LINE_74:	; LINE 74
 	.byte	TOK_BYTE
 	.byte	4
 	.byte	TOK_PUSH_VAR_LOAD
@@ -543,12 +543,12 @@ jump_lbl_15:
 	.byte	TOK_PUSH_NUM
 	.word	256
 	.byte	TOK_BPUT
-@FastBasic_LINE_77:	; LINE 77
+@FastBasic_LINE_75:	; LINE 75
 	.byte	TOK_INCVAR
 	makevar	"___DEBUG_MEM"
 	.byte	TOK_INCVAR
 	makevar	"___DEBUG_MEM"
-@FastBasic_LINE_78:	; LINE 78
+@FastBasic_LINE_76:	; LINE 76
 	.byte	TOK_VAR_LOAD
 	makevar	"___DEBUG_LEN"
 	.byte	TOK_PUSH_NUM
@@ -556,12 +556,12 @@ jump_lbl_15:
 	.byte	TOK_SUB
 	.byte	TOK_VAR_STORE
 	makevar	"___DEBUG_LEN"
-@FastBasic_LINE_79:	; LINE 79
+@FastBasic_LINE_77:	; LINE 77
 	.byte	TOK_JUMP
 	.word	jump_lbl_15
-@FastBasic_LINE_80:	; LINE 80
+@FastBasic_LINE_78:	; LINE 78
 jump_lbl_14:
-@FastBasic_LINE_82:	; LINE 82
+@FastBasic_LINE_80:	; LINE 80
 	.byte	TOK_BYTE
 	.byte	4
 	.byte	TOK_PUSH_VAR_LOAD
@@ -569,15 +569,15 @@ jump_lbl_14:
 	.byte	TOK_PUSH_VAR_LOAD
 	makevar	"___DEBUG_LEN"
 	.byte	TOK_BPUT
-@FastBasic_LINE_90:	; LINE 90
+@FastBasic_LINE_88:	; LINE 88
 	.byte	TOK_JUMP
 	.word	jump_lbl_11
 jump_lbl_11_x:
-@FastBasic_LINE_91:	; LINE 91
+@FastBasic_LINE_89:	; LINE 89
 	.byte	TOK_BYTE
 	.byte	4
 	.byte	TOK_CLOSE
-@FastBasic_LINE_92:	; LINE 92
+@FastBasic_LINE_90:	; LINE 90
 	.byte	TOK_JUMP
 	.word	jump_lbl_18
 jump_lbl_10:
@@ -588,13 +588,13 @@ jump_lbl_10:
 	.byte	TOK_EQ
 	.byte	TOK_CJUMP
 	.word	jump_lbl_18
-@FastBasic_LINE_94:	; LINE 94
+@FastBasic_LINE_92:	; LINE 92
 jump_lbl_18:
-@FastBasic_LINE_95:	; LINE 95
+@FastBasic_LINE_93:	; LINE 93
 	.byte	TOK_BYTE
 	.byte	5
 	.byte	TOK_CLOSE
-@FastBasic_LINE_96:	; LINE 96
+@FastBasic_LINE_94:	; LINE 94
 	.byte	TOK_BYTE
 	.byte	5
 	.byte	TOK_PUSH_BYTE
@@ -604,19 +604,19 @@ jump_lbl_18:
 	.byte	TOK_CSTRING
 	.byte	11, "H4:debug.in"
 	.byte	TOK_XIO
-@FastBasic_LINE_98:	; LINE 98
+@FastBasic_LINE_96:	; LINE 96
 jump_lbl_8:
-@FastBasic_LINE_99:	; LINE 99
+@FastBasic_LINE_97:	; LINE 97
 	.byte	TOK_BYTE
 	.byte	10
 	.byte	TOK_PAUSE
-@FastBasic_LINE_100:	; LINE 100
+@FastBasic_LINE_98:	; LINE 98
 	.byte	TOK_JUMP
 	.word	jump_lbl_7
 jump_lbl_7_x:
-@FastBasic_LINE_102:	; LINE 102
+@FastBasic_LINE_100:	; LINE 100
 	.byte	TOK_CSTRING
 	.byte	9, "[RESUME]", 155
 	.byte	TOK_PRINT_STR
-@FastBasic_LINE_103:	; LINE 103
+@FastBasic_LINE_101:	; LINE 101
 	.byte	TOK_RET
