@@ -1,6 +1,3 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
 /*
  * mockDebug.ts implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
  * into requests and events of the real "execution engine" or "debugger" (here: class MockRuntime).
@@ -22,24 +19,32 @@ import { basename } from 'path-browserify';
 import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType } from './mockRuntime';
 import { Subject } from 'await-notify';
 import * as base64 from 'base64-js';
+import { fastBasicChannel } from './activateMockDebug';
+import { tasks } from 'vscode';
+import * as vscode from 'vscode';
+import * as cp from 'child_process';
+import { appendFile } from 'fs';
+
 
 /**
- * This interface describes the mock-debug specific launch attributes
+ * This interface describes the fastbasic-debugger specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
+ * The schema for these attributes lives in the package.json of the fastbasic-debugger extension.
  * The interface should always match this schema.
  */
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	/** An absolute path to the "program" to debug. */
-	program: string;
+	sourceFile: string;
 	/** Automatically stop target after launch. If not specified, target does not stop. */
 	stopOnEntry?: boolean;
 	/** enable logging the Debug Adapter Protocol */
 	trace?: boolean;
 	/** run without debugging */
 	noDebug?: boolean;
-	/** if specified, results in a simulated compile error in launch. */
-	compileError?: 'default' | 'show' | 'hide';
+	/** absolute path to fastbasic compiler */
+	compilerPath: string;
+	/** absolute path to atari emulator compiler */
+	emulatorPath: string;
 }
 
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
@@ -68,13 +73,14 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _useInvalidatedEvent = false;
 
 	private _addressesInHex = true;
-
+  private _fileAccessor : FileAccessor;
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
 	 * We configure the default implementation of a debug adapter here.
 	 */
 	public constructor(fileAccessor: FileAccessor) {
-		super("mock-debug.txt");
+		super("fastbasic-debugger.txt");
+		this._fileAccessor = fileAccessor;
 
 		// this debugger uses zero-based lines and columns
 		this.setDebuggerLinesStartAt1(false);
@@ -245,26 +251,85 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-
+		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		//logger.log("Unable to compile!", Logger.LogLevel.Stop);
+/*
+		this.sendErrorResponse(response, {
+			id: 1001,
+			format: `compile error: some fake error.`,//, 
+			showUser: true //args.compileError === 'show' ? true : (args.compileError === 'hide' ? false : undefined)
+		});
+		return;
+*/
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
-		// start the program in the runtime
-		await this._runtime.start(args.program, !!args.stopOnEntry, !args.noDebug);
+		// Create a bin folder to hold compiled/symbol files
+		let isWindows = 'win32' === process.platform;
+		var folderDelimiter = isWindows ? "\\" : "/";
+		let file = args.sourceFile;
+		let fileParts = file.split(folderDelimiter);
+		let filename = fileParts[fileParts.length-1];
+		let filenameNoExt = filename.split(".")[0]+".";
+    fileParts[fileParts.length-1] ="bin";
+		let binFolder = fileParts.join(folderDelimiter);
+		await vscode.workspace.fs.createDirectory(vscode.Uri.file(binFolder));
 
-		if (args.compileError) {
-			// simulate a compile/build error in "launch" request:
-			// the error should not result in a modal dialog since 'showUser' is set to false.
-			// A missing 'showUser' should result in a modal dialog.
-			this.sendErrorResponse(response, {
-				id: 1001,
-				format: `compile error: some fake error.`,
-				showUser: args.compileError === 'show' ? true : (args.compileError === 'hide' ? false : undefined)
+		// Delete existing files for this source file
+		var files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(binFolder));
+		for(let i=0;i<files.length;i++) {
+			if (files[i][0].startsWith(filenameNoExt)) {
+				await vscode.workspace.fs.delete( vscode.Uri.file(binFolder+folderDelimiter+files[i][0]), {useTrash: false});
+			}
+		};
+		
+		// Copy the source file to the bin folder 
+		vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder+folderDelimiter+ filename));
+    
+		// Check if the compiler exists
+		if (!this._fileAccessor.doesFileExist(args.compilerPath)) {
+			return vscode.window.showErrorMessage("Could not find FastBasic compiler. Check launch.json.").then(_ => {
+				return undefined;	// abort launch
 			});
-		} else {
-			this.sendResponse(response);
 		}
+
+		// run the fastbasic compiler
+		fastBasicChannel.show(true);
+		//fastBasicChannel.sendText(`@ECHO Compiling ${filename} using FastBasic Compiler..`);
+		fastBasicChannel.sendText(`cd \"${binFolder}\"`);
+		fastBasicChannel.sendText(`${args.compilerPath} \"${filename}\"`);
+		
+		let atariExecutable = binFolder+folderDelimiter+filenameNoExt+"xex";
+
+		var sucessful = await this._fileAccessor.waitUntilFileExists(atariExecutable, 10000);
+		
+
+		/*   let exec = cp.execFile(args.compilerPath,[ "\"" + file + "\""], (err, stdout, stderr) => {
+			fastBasicChannel.appendLine(stdout);
+			fastBasicChannel.appendLine(stderr);
+			if (err) {
+				fastBasicChannel.appendLine('error: ' + err);
+				return undefined; // abort launch
+			}
+		});*/
+		
+		//let options: any = isWindows ? { shell: true, StdioOptions:"pipe" } : undefined;
+		//let output = cp.execFileSync(args.compilerPath,[ "\"" + file + "\""]);
+
+		
+		//fastBasicChannel.appendLine( `${new Date().toLocaleTimeString()} - Unable to compile program!`);
+		
+
+		if (!this._fileAccessor.doesFileExist(args.emulatorPath)) {
+			return vscode.window.showErrorMessage("Could not find Atari Emulator. Check launch.json.").then(_ => {
+				return undefined;	// abort launch
+			});
+		}
+
+
+		// start the program in the runtime
+		await this._runtime.start(file, !!args.stopOnEntry, !args.noDebug);
+		this.sendResponse(response);
 	}
 
 	protected setFunctionBreakPointsRequest(response: DebugProtocol.SetFunctionBreakpointsResponse, args: DebugProtocol.SetFunctionBreakpointsArguments, request?: DebugProtocol.Request): void {

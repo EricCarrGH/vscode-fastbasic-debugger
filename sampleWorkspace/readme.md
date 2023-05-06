@@ -5,32 +5,19 @@ The text of the markdown is considered the "program to debug" and certain keywor
 
 ## Running or Debugging
 
-With the "Run/Debug" split button in the editor header you can easily "run" or "debug" a Markdown file without having to configure a debug configuration.
-"Running" a Markdown file has no visible effect. "Debugging" a Markdown file starts the debugger and stops on the first line.
+With the "Run/Debug" split button in the editor header you can easily "run" or "debug" a FastBasic file without having to configure a debug configuration.
+* "Running" a file compiles and runs it in the emulator.
+* "Debugging" a file compiles debug information into the file before starting, then starts a debugging session.
   
-## Stacks
-
-If debugging stops on a line, the line becomes a stack in the CALL STACK with the individual words shown as frames.
-The following line results in a long stack trace and shows the paging feature:
-a b c d e f g h i j k l m n o p q r s t u v w x y z a b c d e f g h i j k l m n o p q r s t u v w x y z a b c d e f g h i j k l m n o p q r s t u v w x y z
-
 ## Variables
 
-Words starting with `$` are treated as variables. Letter casing doesn't matter.
+All variables in FastBasic are global. All variable types are supported:
 
-Writing to a variable is done with the `$variable=value` syntax. The format of the value determines the type of the variable. Here are examples for all types:
-- Integer: $i=123
-- String: $s="abc"
-- Boolean: $b1=true $b2=false
-- Float: $f=3.14
-- Object: $o={abc}
+- Integer: myVar
+- Float: myVar%
+- String: myVar$
+- Arrays (Byte, Integer, String)
 
-Variables are shown in the VARIABLES view under the "Locals" and "Globals" scopes whenever the debugger stops.
-In addition a variable's value is shown when hovering over a variable and VS Code's Inline Values features shows the value at the end of the line.
-
-A variable where the name contains the string "lazy" will be shown in the VARIABLES view with a UI that requires an additional click to retrieve the value. Two examples:
-- Lazy Integer: $lazyInteger=999
-- Lazy Object: $lazyObject={foo}
 
 ## Breakpoints
 

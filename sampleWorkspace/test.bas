@@ -4,8 +4,6 @@ AB%=56.78
 A=1
 B=A+5
 
-
-
 ? "XYZ"
 dim c4(3), c5(4), c6(5), c5b(4), A4%(3), A5%(4)
 
@@ -31,7 +29,7 @@ j5$(4)="TEST-4-MANUAL"
 
 
 PROC TESTS
-' Test memory dump
+' Test memory dump 
 open #5,8,0,"H4:debug.in"
 put #5, 2 ' memory dump
 mem=&a:bput #5,&mem,2:size=22:bput #5,&size,2
@@ -42,7 +40,6 @@ ENDPROC
 @___DEBUG_BP 1
 GET ___DEBUG_KEY
 end
-
 
 
 

@@ -1,6 +1,6 @@
 ca65 V2.18 - fastbasic-4.6
-Main file   : test.asm
-Current file: test.asm
+Main file   : C:\Projects\vscode-fastbasic-debugger\sampleWorkspace\test.asm
+Current file: C:\Projects\vscode-fastbasic-debugger\sampleWorkspace\test.asm
 
 000000r 1               ; Imported symbols
 000000r 1               	.globalzp IOERROR

@@ -9,7 +9,10 @@ export interface FileAccessor {
 	isWindows: boolean;
 	readFile(path: string): Promise<Uint8Array>;
 	writeFile(path: string, contents: Uint8Array): Promise<void>;
-	waitUntilFileDoesNotExist(path: string);
+	waitUntilFileDoesNotExist(path: string, timeoutMs?: number);
+	waitUntilFileExists(path: string, timeoutMs?: number)
+	doesFileExist(path: string);
+	
 }
 
 export interface IRuntimeBreakpoint {
@@ -455,7 +458,7 @@ export class MockRuntime extends EventEmitter {
 				return;
 			}
 
-			file = this.normalizePathAndCasing(file);
+	
 			this._sourceFile = file;
 
 			//file = file.replace("readme.md", "test.bas");

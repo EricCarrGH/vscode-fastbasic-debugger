@@ -5,12 +5,14 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"type": "mock",
+			"type": "fastbasic",
 			"request": "launch",
 			"name": "Debug FastBasic",
-			"program": "${file}",
+			"sourceFile": "${file}",
 			"stopOnEntry": true,
-			"trace": false
+			"trace": true,
+			"compilerPath": "C:/Projects/FastBasic/build/compiler/fastbasic.exe",
+			"emulatorPath": "C:/atari/Altirra/Altirra64.exe"
 		}
 	]
 }

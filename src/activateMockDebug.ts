@@ -12,41 +12,47 @@ import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken 
 import { MockDebugSession } from './mockDebug';
 import { FileAccessor } from './mockRuntime';
 
+export let fastBasicChannel: vscode.Terminal;
+
 export function activateMockDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
 
+	fastBasicChannel = vscode.window.createTerminal("FastBasic");
+
 	context.subscriptions.push(
-		vscode.commands.registerCommand('extension.mock-debug.runEditorContents', (resource: vscode.Uri) => {
+		vscode.commands.registerCommand('extension.fastbasic-debugger.runEditorContents', (resource: vscode.Uri) => {
 			let targetResource = resource;
 			if (!targetResource && vscode.window.activeTextEditor) {
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
 				vscode.debug.startDebugging(undefined, {
-					type: 'mock',
+					type: 'fastbasic',
 					name: 'Run File',
 					request: 'launch',
-					program: targetResource.fsPath
+					sourceFile: targetResource.fsPath
 				},
 					{ noDebug: true }
 				);
 			}
 		}),
-		vscode.commands.registerCommand('extension.mock-debug.debugEditorContents', (resource: vscode.Uri) => {
+		vscode.commands.registerCommand('extension.fastbasic-debugger.debugEditorContents', (resource: vscode.Uri) => {
 			let targetResource = resource;
 			if (!targetResource && vscode.window.activeTextEditor) {
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
 				vscode.debug.startDebugging(undefined, {
-					type: 'mock',
+					type: 'fastbasic',
 					name: 'Debug File',
 					request: 'launch',
-					program: targetResource.fsPath,
-					stopOnEntry: true
+					sourceFile: targetResource.fsPath,
+					stopOnEntry: true,
+          compilerPath: "E.G. c:/fastbasic/fastbasic.exe",
+          emulatorPath: "E.G. c:/atari/Altirra/Altirra64.exe"
 				});
 			}
 		}),
-		vscode.commands.registerCommand('extension.mock-debug.toggleFormatting', (variable) => {
+		vscode.commands.registerCommand('extension.fastbasic-debugger.toggleFormatting', (variable) => {
 			const ds = vscode.debug.activeDebugSession;
 			if (ds) {
 				ds.customRequest('toggleFormatting');
@@ -54,39 +60,27 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 		})
 	);
 
-	context.subscriptions.push(vscode.commands.registerCommand('extension.mock-debug.getProgramName', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.fastbasic-debugger.getProgramName', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter the name of a markdown file in the workspace folder",
 			value: "${file}"
 		});
 	}));
 
-	// register a configuration provider for 'mock' debug type
+	// register a configuration provider for 'fastbasic' debug type
 	const provider = new MockConfigurationProvider();
-	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('mock', provider));
+	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('fastbasic', provider));
 
-	// register a dynamic configuration provider for 'mock' debug type
-	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('mock', {
+	// register a dynamic configuration provider for 'fastbasic' debug type
+	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('fastbasic', {
 		provideDebugConfigurations(folder: WorkspaceFolder | undefined): ProviderResult<DebugConfiguration[]> {
 			return [
 				{
 					name: "Dynamic Launch",
 					request: "launch",
-					type: "mock",
-					program: "${file}"
-				}/*,
-				{
-					name: "Another Dynamic Launch",
-					request: "launch",
-					type: "mock",
-					program: "${file}"
-				},
-				{
-					name: "Mock Launch",
-					request: "launch",
-					type: "mock",
-					program: "${file}"
-				}*/
+					type: "fastbasic",
+					sourceFile: "${file}"
+				}
 			];
 		}
 	}, vscode.DebugConfigurationProviderTriggerKind.Dynamic));
@@ -94,63 +88,65 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 	if (!factory) {
 		factory = new InlineDebugAdapterFactory();
 	}
-	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mock', factory));
+	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('fastbasic', factory));
 	if ('dispose' in factory) {
 	//	context.subscriptions.push(factory);
 	}
 
 	// override VS Code's default implementation of the debug hover
 	// here we match only Mock "variables", that are words starting with an '$'
-	context.subscriptions.push(vscode.languages.registerEvaluatableExpressionProvider('markdown', {
-		provideEvaluatableExpression(document: vscode.TextDocument, position: vscode.Position): vscode.ProviderResult<vscode.EvaluatableExpression> {
+	// context.subscriptions.push(vscode.languages.registerEvaluatableExpressionProvider('markdown', {
+	// 	provideEvaluatableExpression(document: vscode.TextDocument, position: vscode.Position): vscode.ProviderResult<vscode.EvaluatableExpression> {
 
-			const VARIABLE_REGEXP = /\$[a-z][a-z0-9]*/ig;
-			const line = document.lineAt(position.line).text;
+	// 		const VARIABLE_REGEXP = /\$[a-z][a-z0-9]*/ig;
+	// 		const line = document.lineAt(position.line).text;
 
-			let m: RegExpExecArray | null;
-			while (m = VARIABLE_REGEXP.exec(line)) {
-				const varRange = new vscode.Range(position.line, m.index, position.line, m.index + m[0].length);
+	// 		let m: RegExpExecArray | null;
+	// 		while (m = VARIABLE_REGEXP.exec(line)) {
+	// 			const varRange = new vscode.Range(position.line, m.index, position.line, m.index + m[0].length);
 
-				if (varRange.contains(position)) {
-					return new vscode.EvaluatableExpression(varRange);
-				}
-			}
-			return undefined;
-		}
-	}));
+	// 			if (varRange.contains(position)) {
+	// 				return new vscode.EvaluatableExpression(varRange);
+	// 			}
+	// 		}
+	// 		return undefined;
+	// 	}
+	// }));
 
 	// override VS Code's default implementation of the "inline values" feature"
-	context.subscriptions.push(vscode.languages.registerInlineValuesProvider('markdown', {
+	// context.subscriptions.push(vscode.languages.registerInlineValuesProvider('basic', {
 
-		provideInlineValues(document: vscode.TextDocument, viewport: vscode.Range, context: vscode.InlineValueContext) : vscode.ProviderResult<vscode.InlineValue[]> {
+	// 	provideInlineValues(document: vscode.TextDocument, viewport: vscode.Range, context: vscode.InlineValueContext) : vscode.ProviderResult<vscode.InlineValue[]> {
 
-			const allValues: vscode.InlineValue[] = [];
+	// 		const allValues: vscode.InlineValue[] = [];
 
-			for (let l = viewport.start.line; l <= context.stoppedLocation.end.line; l++) {
-				const line = document.lineAt(l);
-				var regExp = /\$([a-z][a-z0-9]*)/ig;	// variables are words starting with '$'
-				do {
-					var m = regExp.exec(line.text);
-					if (m) {
-						const varName = m[1];
-						const varRange = new vscode.Range(l, m.index, l, m.index + varName.length);
+	// 		for (let l = viewport.start.line; l <= context.stoppedLocation.end.line; l++) {
+	// 			const line = document.lineAt(l);
+	// 			var regExp = /\$([a-z][a-z0-9]*)/ig;	// variables are words starting with '$'
+	// 			do {
+	// 				var m = regExp.exec(line.text);
+	// 				if (m) {
+	// 					const varName = m[1];
+	// 					const varRange = new vscode.Range(l, m.index, l, m.index + varName.length);
 
-						// some literal text
-						//allValues.push(new vscode.InlineValueText(varRange, `${varName}: ${viewport.start.line}`));
+	// 					// some literal text
+	// 					//allValues.push(new vscode.InlineValueText(varRange, `${varName}: ${viewport.start.line}`));
 
-						// value found via variable lookup
-						allValues.push(new vscode.InlineValueVariableLookup(varRange, varName, false));
+	// 					// value found via variable lookup
+	// 					allValues.push(new vscode.InlineValueVariableLookup(varRange, varName, false));
 
-						// value determined via expression evaluation
-						//allValues.push(new vscode.InlineValueEvaluatableExpression(varRange, varName));
-					}
-				} while (m);
-			}
+	// 					// value determined via expression evaluation
+	// 					//allValues.push(new vscode.InlineValueEvaluatableExpression(varRange, varName));
+	// 				}
+	// 			} while (m);
+	// 		}
 
-			return allValues;
-		}
-	}));
+	// 		return allValues;
+	// 	}
+	// }));
 }
+
+
 
 class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 
@@ -163,16 +159,19 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 		// if launch.json is missing or empty
 		if (!config.type && !config.request && !config.name) {
 			const editor = vscode.window.activeTextEditor;
-			if (editor && editor.document.languageId === 'markdown') {
-				config.type = 'mock';
+			if (editor && editor.document.languageId === 'basic') {
+				config.type = 'fastbasic';
 				config.name = 'Launch';
 				config.request = 'launch';
-				config.program = '${file}';
+				config.sourceFile = '${file}';
 				config.stopOnEntry = true;
 			}
 		}
+		
+		//return undefined;	// abort launch
+		
 
-		if (!config.program) {
+		if (!config.sourceFile) {
 			return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => {
 				return undefined;	// abort launch
 			});
@@ -197,18 +196,46 @@ export const workspaceFileAccessor: FileAccessor = {
 	async writeFile(path: string, contents: Uint8Array) {
 		await vscode.workspace.fs.writeFile(pathToUri(path), contents);
 	}, 
-	async waitUntilFileDoesNotExist(path: string) {
+	async waitUntilFileDoesNotExist(path: string, timeoutMs?: number) {
+		let waitedMs=0;
 		while (true) {
 			try {
 				let uri = vscode.Uri.file(path);
-				let stat = await vscode.workspace.fs.stat(uri);
-				var t = stat.type;
+				await vscode.workspace.fs.stat(uri);
 			} catch (e) {
 				// Once we get an exception (file does not exist. return)
-				return;
+				return true;
 			}
-			await new Promise(resolve => setTimeout(resolve, 250));
+			await new Promise(resolve => setTimeout(resolve, 125));
+			waitedMs+=125;
+			if (timeoutMs && waitedMs>=timeoutMs) {
+				return false;
+			}
 		}
+	},
+	async waitUntilFileExists(path: string, timeoutMs?: number) {
+		let waitedMs=0;
+		while (true) {
+			if (await this.doesFileExist(path)) {
+				return true;
+			}
+
+			await new Promise(resolve => setTimeout(resolve, 125));
+			waitedMs+=125;
+			if (timeoutMs && waitedMs>=timeoutMs) {
+				return false;
+			}
+		}
+	},
+	async doesFileExist(path: string) {
+		try {
+			let uri = vscode.Uri.file(path);
+			await vscode.workspace.fs.stat(uri);
+			return true;
+		} catch (e) {
+			// Once we get an exception (file does not exist. return)
+		}
+		return false;
 	}
 };
 

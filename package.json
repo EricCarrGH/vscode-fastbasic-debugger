@@ -1,11 +1,11 @@
 {
-  "name": "mock-debug",
-  "displayName": "Mock Debug",
-  "version": "0.52.0",
-  "publisher": "ms-vscode",
-  "description": "Starter extension for developing debug adapters for VS Code.",
+  "name": "fastbasic-debugger",
+  "displayName": "FastBasic Debugger",
+  "version": "0.2.0",
+  "publisher": "carr-designs",
+  "description": "Runs FastBasic automatically on an emulator, providing debugging support to set breakpoints, step through code, view and change variables.",
   "author": {
-    "name": "Microsoft Corporation"
+    "name": "Eric Carr"
   },
   "license": "MIT",
   "keywords": [
@@ -14,17 +14,17 @@
   "engines": {
     "vscode": "^1.66.0"
   },
-  "icon": "images/mock-debug-icon.png",
+  "icon": "images/fastbasic-debugger-icon.png",
   "categories": [
     "Debuggers"
   ],
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/Microsoft/vscode-mock-debug.git"
+    "url": "https://todo.git"
   },
   "bugs": {
-    "url": "https://github.com/Microsoft/vscode-mock-debug/issues"
+    "url": "https://todo/issues"
   },
   "scripts": {
     "compile": "tsc -p ./",
@@ -66,9 +66,9 @@
   "main": "./dist/extension.js",
   "browser": "./dist/web-extension.js",
   "activationEvents": [
-    "onDebugResolve:mock",
-    "onDebugDynamicConfigurations:mock",
-    "onCommand:extension.mock-debug.getProgramName"
+    "onDebugResolve:fastbasic",
+    "onDebugDynamicConfigurations:fastbasic",
+    "onCommand:extension.fastbasic-debugger.getProgramName"
   ],
   "workspaceTrust": {
     "request": "never"
@@ -77,50 +77,50 @@
     "menus": {
       "editor/title/run": [
         {
-          "command": "extension.mock-debug.runEditorContents",
+          "command": "extension.fastbasic-debugger.runEditorContents",
           "when": "resourceLangId == basic",
           "group": "navigation@1"
         },
         {
-          "command": "extension.mock-debug.debugEditorContents",
+          "command": "extension.fastbasic-debugger.debugEditorContents",
           "when": "resourceLangId == basic",
           "group": "navigation@2"
         }
       ],
       "commandPalette": [
         {
-          "command": "extension.mock-debug.debugEditorContents",
+          "command": "extension.fastbasic-debugger.debugEditorContents",
           "when": "resourceLangId == basic"
         },
         {
-          "command": "extension.mock-debug.runEditorContents",
+          "command": "extension.fastbasic-debugger.runEditorContents",
           "when": "resourceLangId == basic"
         }
       ],
       "debug/variables/context": [
         {
-          "command": "extension.mock-debug.toggleFormatting",
-          "when": "debugType == 'mock' && debugProtocolVariableMenuContext == 'simple'"
+          "command": "extension.fastbasic-debugger.toggleFormatting",
+          "when": "debugType == 'FastBasic' && debugProtocolVariableMenuContext == 'simple'"
         }
       ]
     },
     "commands": [
       {
-        "command": "extension.mock-debug.debugEditorContents",
+        "command": "extension.fastbasic-debugger.debugEditorContents",
         "title": "Debug File",
-        "category": "Mock Debug",
+        "category": "FastBasic Debug",
         "enablement": "!inDebugMode",
         "icon": "$(debug-alt)"
       },
       {
-        "command": "extension.mock-debug.runEditorContents",
+        "command": "extension.fastbasic-debugger.runEditorContents",
         "title": "Run File",
-        "category": "Mock Debug",
+        "category": "FastBasic Debug",
         "enablement": "!inDebugMode",
         "icon": "$(play)"
       },
       {
-        "command": "extension.mock-debug.toggleFormatting",
+        "command": "extension.fastbasic-debugger.toggleFormatting",
         "title": "Toggle between decimal and hex formatting"
       }
     ],
@@ -131,22 +131,22 @@
     ],
     "debuggers": [
       {
-        "type": "mock",
+        "type": "fastbasic",
         "languages": [
           "basic"
         ],
-        "label": "Mock Debug",
+        "label": "FastBasic Debugger",
         "program": "./out/debugAdapter.js",
         "runtime": "node",
         "configurationAttributes": {
           "launch": {
             "required": [
-              "program"
+              "sourceFile","compilerPath","emulatorPath"
             ],
             "properties": {
-              "program": {
+              "sourceFile": {
                 "type": "string",
-                "description": "Absolute path to a text file.",
+                "description": "Absolute path to .BAS file.",
                 "default": "${workspaceFolder}/${command:AskForProgramName}"
               },
               "stopOnEntry": {
@@ -159,83 +159,47 @@
                 "description": "Enable logging of the Debug Adapter Protocol.",
                 "default": true
               },
-              "compileError": {
+              "compilerPath": {
                 "type": "string",
-                "description": "Simulates a compile error in 'launch' request.",
-                "enum": [
-                  "default",
-                  "show",
-                  "hide"
-                ],
-                "enumDescriptions": [
-                  "default: show fake compile error to user",
-                  "show fake compile error to user",
-                  "do not show fake compile error to user"
-                ]
-              }
-            }
-          },
-          "attach": {
-            "required": [
-              "program"
-            ],
-            "properties": {
-              "program": {
+                "description": "Full path to the FastBasic compiler.",
+                "default":"E.G. c:/fastbasic/fastbasic.exe"
+              },
+              "emulatorPath": {
                 "type": "string",
-                "description": "Absolute path to a text file.",
-                "default": "${workspaceFolder}/${command:AskForProgramName}"
-              },
-              "stopOnEntry": {
-                "type": "boolean",
-                "description": "Automatically stop after attach.",
-                "default": true
-              },
-              "trace": {
-                "type": "boolean",
-                "description": "Enable logging of the Debug Adapter Protocol.",
-                "default": true
-              },
-              "compileError": {
-                "type": "string",
-                "description": "Simulates a compile error in 'attach' request.",
-                "enum": [
-                  "default",
-                  "show",
-                  "hide"
-                ],
-                "enumDescriptions": [
-                  "default: show fake compile error to user",
-                  "show fake compile error to user",
-                  "do not show fake compile error to user"
-                ]
+                "description": "Full path to the Atari Emulator.",
+                "default":"E.G. C:/atari/Altirra/Altirra64.exe"
               }
             }
           }
         },
         "initialConfigurations": [
           {
-            "type": "mock",
+            "type": "fastbasic",
             "request": "launch",
             "name": "Ask for file name",
             "program": "${workspaceFolder}/${command:AskForProgramName}",
-            "stopOnEntry": true
+            "stopOnEntry": true,
+            "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
+            "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe"
           }
         ],
         "configurationSnippets": [
           {
-            "label": "Mock Debug: Launch",
+            "label": "FastBasic Debug: Launch",
             "description": "A new configuration for 'debugging' a user selected FastBasic file.",
             "body": {
-              "type": "mock",
+              "type": "fastbasic",
               "request": "launch",
               "name": "Ask for file name",
               "program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
-              "stopOnEntry": true
+              "stopOnEntry": true,
+              "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
+              "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe"
             }
           }
         ],
         "variables": {
-          "AskForProgramName": "extension.mock-debug.getProgramName"
+          "AskForProgramName": "extension.fastbasic-debugger.getProgramName"
         }
       }
     ]
