@@ -9,6 +9,7 @@ export interface FileAccessor {
 	isWindows: boolean;
 	readFile(path: string): Promise<Uint8Array>;
 	writeFile(path: string, contents: Uint8Array): Promise<void>;
+	waitUntilFileDoesNotExist(path: string);
 }
 
 export interface IRuntimeBreakpoint {
@@ -84,9 +85,19 @@ interface Word {
 }
 
 
+
 export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+const VAR_BYTE='Byte', VAR_WORD='Word', VAR_FLOAT='Float', VAR_STRING='String';
+
+const VAR_TYPE_LEN: Map<string, number> = new Map([
+	[VAR_BYTE, 1],
+	[VAR_WORD, 2],
+	[VAR_FLOAT, 6],
+	[VAR_STRING, 256]
+]);
 
 /**
  * A Mock runtime with minimal debugger functionality.
@@ -104,6 +115,7 @@ export function timeout(ms: number) {
  * class because you can rely on some existing debugger or runtime.
  */
 export class MockRuntime extends EventEmitter {
+
 
 	// the initial (and one and only) file we are 'debugging'
 	private _sourceFile: string = '';
@@ -456,7 +468,7 @@ export class MockRuntime extends EventEmitter {
 			this._debugFileToEmu= symbolFileParts.join("/") + "in";
 			this._debugFileFromEmu = symbolFileParts.join("/") + "out";
 
-			this.initializeContents(
+			await this.initializeContents(
 				await this.fileAccessor.readFile(file),
 				await this.fileAccessor.readFile(symbolFile+".lst"),
 				await this.fileAccessor.readFile(symbolFile+".lbl")
@@ -464,7 +476,7 @@ export class MockRuntime extends EventEmitter {
 		}
 	}
 
-	private initializeContents(memory: Uint8Array, list: Uint8Array, refs: Uint8Array) {
+	private async initializeContents(memory: Uint8Array, list: Uint8Array, refs: Uint8Array) {
 		this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
 		let listLines = new TextDecoder().decode(list).split(/\r?\n/);
 		let refsLines = new TextDecoder().decode(refs).split(/\r?\n/);
@@ -520,25 +532,20 @@ export class MockRuntime extends EventEmitter {
 			var value;
 
 			// Determine byte length for this variable type
-			var byteLen=2; 
-			if (varType === "String") {
-				name = name + "$";
-				byteLen = 256;
-			} else if (varType === "Float") {
-				name = name + "%";
-				byteLen = 6;
-			} else if (varType === "Byte") {
-				byteLen = 1;
+			var byteLen= VAR_TYPE_LEN.get(varType);
+			if (!byteLen) {
+				console.error(`Warning! unexpected variable type: ${varType} for var: ${name}`);
+				continue;
 			}
-
+		
 			if (varTypeParts.length>1 && varTypeParts[1] === "Array") {
 				let makeVar = `makevar\t\"${name}\"`;
 				
 				for (let j = 2; j < listLines.length; j++) {
 					if (listLines[j].endsWith(makeVar) && listLines[j-1].endsWith("TOK_DIM")) {
-						let arraySize = parseInt(listLines[j-(varType === "Float" ? 3 : 2)].split("\t").slice(-1)[0]);
+						let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 3 : 2)].split("\t").slice(-1)[0]);
 						
-						if (varType === "Word" || varType === "String") {
+						if (varType === VAR_WORD || varType === VAR_STRING) {
 							arraySize /= 2;
 						} 
 
@@ -547,18 +554,26 @@ export class MockRuntime extends EventEmitter {
 						if (arraySize < 256) {
 							value = [];
 							for(let k=0;k<arraySize;k++) {
-								value.push(new RuntimeVariable(k.toString(), varType === "String" ? "":0, varType, 0));
+								value.push(new RuntimeVariable(k.toString(), varType === VAR_STRING ? "":0, varType, 0));
 							}
 						}
 						break;
 					}
 				}
 			} else {
-				value = varType === "String" ? "" : 0;
+				value = varType === VAR_STRING ? "" : 0;
 			}
 			
+				
+		
 			if (typeof value !== 'undefined') {
-			
+
+				if (varType === VAR_STRING) {
+					name = name + "$";
+				} else if (varType === VAR_FLOAT) {
+					name = name + "%";
+				}
+		
 				let v = new RuntimeVariable(name, value, varType, byteLen);
 				this.variables.set(name, v);
 			}
@@ -571,6 +586,7 @@ export class MockRuntime extends EventEmitter {
 		al 002306 .fb_var____DEBUG_KEY
 		*/
 		var minLoc = 65536;
+		let memSize = 0;
 		for (let i = 0; i < refsLines.length; i++) {
 			let parts = refsLines[i].split('.');
 			if (parts.length>1 && parts[1].startsWith("fb_var_")) {
@@ -582,6 +598,7 @@ export class MockRuntime extends EventEmitter {
 						minLoc = memLoc;
 					}
 					v.memLoc = memLoc;
+					memSize += VAR_TYPE_LEN.get(v.type) || 0;
 				}	
 			}		
 		}
@@ -590,14 +607,26 @@ export class MockRuntime extends EventEmitter {
 			array[index] = value % 256;
 			array[index+1] = value/256;
 		}
+
+		function getAtariValue(array:Uint8Array, index: number, type: string)  {
+			switch (type) {
+				case VAR_WORD : return array[index] + array[index+1]*256;
+				case VAR_BYTE : return array[index];
+				case VAR_FLOAT: return 12.34; // TODO - parsee Atari 6-byte BCD
+				case VAR_STRING: return new TextDecoder().decode(array.slice(index+1,index+array[index]+1));
+				default: return 0;
+			}
+		}
+
+		// Construct memory dump payload request
 		let requestMemoryDump = new Uint8Array(1+4*(this.variables.size+1));
 
 		requestMemoryDump[0] = 2;// Dump memory
 		setAtariWord(requestMemoryDump, 1, minLoc);
-		setAtariWord(requestMemoryDump, 3, this.variables.size*2);
+		setAtariWord(requestMemoryDump, 3, memSize);
 		let memDumpIndex = 5;
 		this.variables.forEach(v => {
-			if (v.memLoc) {
+			if (v.memLoc && (v.type === VAR_STRING || Array.isArray(v.value)) ) {
 				setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
 				setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
 				memDumpIndex+=4;
@@ -607,7 +636,54 @@ export class MockRuntime extends EventEmitter {
 		});
 
 		this._requestMemoryDumpPayload = requestMemoryDump;
-		//this.fileAccessor.writeFile(this._debugFileToEmu, this._requestMemoryDumpPayload);
+		// Write memory dump request
+		await this.fileAccessor.writeFile(this._debugFileToEmu, this._requestMemoryDumpPayload);
+
+		// Wait for response
+		await this.fileAccessor.waitUntilFileDoesNotExist(this._debugFileToEmu);
+
+		// Parse response and update vars
+		let debugFileResponse = await this.fileAccessor.readFile(this._debugFileFromEmu);
+
+		let varIndex = 0;
+		let heapIndex = memSize;
+
+		// Parse incoming variable data and populate variables in debugger
+		this.variables.forEach(v => {
+			if (v.memLoc) {
+				let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
+				let arrayLen = v.byteLen / typeLen;
+				switch (v.type) {
+					case VAR_WORD:
+					case VAR_FLOAT:
+					case VAR_STRING:
+						if (arrayLen === 1) {
+							varIndex = v.memLoc-minLoc;
+							if (v.type === VAR_STRING) {
+								 varIndex = heapIndex;
+								 heapIndex+=typeLen;
+							}
+							v.value = getAtariValue(debugFileResponse, varIndex, v.type);
+
+							break;
+						}
+					case VAR_BYTE:
+						if (arrayLen === 0) {
+							console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
+							break;
+						} 
+						for(let i=0;i<arrayLen;i++) {
+							v.value[i].value = getAtariValue(debugFileResponse, heapIndex, v.type);
+							heapIndex += typeLen;
+						}
+						
+						break;
+				}	
+				
+				
+				
+			} 
+		});
 
 		this.instructions = [];
 

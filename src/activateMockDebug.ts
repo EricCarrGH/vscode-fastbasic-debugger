@@ -74,7 +74,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 					request: "launch",
 					type: "mock",
 					program: "${file}"
-				},
+				}/*,
 				{
 					name: "Another Dynamic Launch",
 					request: "launch",
@@ -86,7 +86,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 					request: "launch",
 					type: "mock",
 					program: "${file}"
-				}
+				}*/
 			];
 		}
 	}, vscode.DebugConfigurationProviderTriggerKind.Dynamic));
@@ -96,7 +96,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 	}
 	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mock', factory));
 	if ('dispose' in factory) {
-		context.subscriptions.push(factory);
+	//	context.subscriptions.push(factory);
 	}
 
 	// override VS Code's default implementation of the debug hover
@@ -196,6 +196,19 @@ export const workspaceFileAccessor: FileAccessor = {
 	},
 	async writeFile(path: string, contents: Uint8Array) {
 		await vscode.workspace.fs.writeFile(pathToUri(path), contents);
+	}, 
+	async waitUntilFileDoesNotExist(path: string) {
+		while (true) {
+			try {
+				let uri = vscode.Uri.file(path);
+				let stat = await vscode.workspace.fs.stat(uri);
+				var t = stat.type;
+			} catch (e) {
+				// Once we get an exception (file does not exist. return)
+				return;
+			}
+			await new Promise(resolve => setTimeout(resolve, 250));
+		}
 	}
 };
 
