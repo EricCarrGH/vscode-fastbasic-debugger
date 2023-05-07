@@ -160,6 +160,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// make VS Code show a 'step back' button
 		response.body.supportsStepBack = false;
 
+	
 		// make VS Code support data breakpoints
 		response.body.supportsDataBreakpoints = true;
 
@@ -203,9 +204,9 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsSetExpression = true;
 
 		// make VS Code send disassemble request
-		response.body.supportsDisassembleRequest = true;
-		response.body.supportsSteppingGranularity = true;
-		response.body.supportsInstructionBreakpoints = true;
+		response.body.supportsDisassembleRequest = false;
+		response.body.supportsSteppingGranularity = false;
+		response.body.supportsInstructionBreakpoints = false;
 
 		// make VS Code able to read and write variable memory
 		response.body.supportsReadMemoryRequest = true;
@@ -461,7 +462,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
-
+		
 		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
 		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
 		const endFrame = startFrame + maxLevels;
@@ -582,23 +583,23 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-		this._runtime.step(args.granularity === 'instruction', false);
+		this._runtime.step();
 		this.sendResponse(response);
 	}
 
 	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
-		this._runtime.step(args.granularity === 'instruction', true);
-		this.sendResponse(response);
+		//this._runtime.step(args.granularity === 'instruction', true);
+		//this.sendResponse(response);
 	}
 
 	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
-		this._runtime.stepIn(args.targetId);
-		this.sendResponse(response);
+		//this._runtime.stepIn(args.targetId);
+		//this.sendResponse(response);
 	}
 
 	protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
-		this._runtime.stepOut();
-		this.sendResponse(response);
+		//this._runtime.stepOut();
+		//this.sendResponse(response);
 	}
 
 

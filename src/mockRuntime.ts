@@ -242,120 +242,29 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Step forward to the next line.
 	 */
-	public async step(instruction: boolean, reverse: boolean) {
+	public async step() {
 		let payload = new Uint8Array(1);
 		payload[0] = 3;// Step forward
 
 		// Write payload
 		await this.sendPayloadToProgram(payload);
 		await this.waitOnProgram();
-
-		// if (instruction) {
-		// 	if (reverse) {
-		// 		this.instruction--;
-		// 	} else {
-		// 		this.instruction++;
-		// 	}
-		// 	this.sendEvent('stopOnStep');
-		// } else {
-		// 	if (!this.executeLine(this.currentLine, reverse)) {
-		// 		if (!this.updateCurrentLine(reverse)) {
-		// 			this.findNextStatement(reverse, 'stopOnStep');
-		// 		}
-		// 	}
-		// }
-	}
-
-	private updateCurrentLine(reverse: boolean): boolean {
-		if (reverse) {
-			if (this.currentLine > 0) {
-				this.currentLine--;
-			} else {
-				// no more lines: stop at first line
-				this.currentLine = 0;
-				this.currentColumn = undefined;
-				this.sendEvent('stopOnEntry');
-				return true;
-			}
-		} else {
-			if (this.currentLine < this.sourceLines.length-1) {
-				this.currentLine++;
-			} else {
-				// no more lines: run to end
-				this.currentColumn = undefined;
-				this.sendEvent('end');
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/**
-	 * "Step into" for Mock debug means: go to next character
-	 */
-	public stepIn(targetId: number | undefined) {
-		if (typeof targetId === 'number') {
-			this.currentColumn = targetId;
-			this.sendEvent('stopOnStep');
-		} else {
-			if (typeof this.currentColumn === 'number') {
-				if (this.currentColumn <= this.sourceLines[this.currentLine].length) {
-					this.currentColumn += 1;
-				}
-			} else {
-				this.currentColumn = 1;
-			}
-			this.sendEvent('stopOnStep');
-		}
-	}
-
-	/**
-	 * "Step out" for Mock debug means: go to previous character
-	 */
-	public stepOut() {
-		if (typeof this.currentColumn === 'number') {
-			this.currentColumn -= 1;
-			if (this.currentColumn === 0) {
-				this.currentColumn = undefined;
-			}
-		}
-		this.sendEvent('stopOnStep');
-	}
-
-	
-	/**
-	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
+	 * Just put the current line number for now
 	 */
 	public stack(startFrame: number, endFrame: number): IRuntimeStack {
-
-		const line = this.getLine();
-		const words = this.getWords(this.currentLine, line);
-		words.push({ name: 'BOTTOM', line: -1, index: -1 });	// add a sentinel so that the stack is never empty...
-
-		// if the line contains the word 'disassembly' we support to "disassemble" the line by adding an 'instruction' property to the stackframe
-		const instruction = line.indexOf('disassembly') >= 0 ? this.instruction : undefined;
-
-		const column = typeof this.currentColumn === 'number' ? this.currentColumn : undefined;
-
-		const frames: IRuntimeStackFrame[] = [];
-		// every word of the current line becomes a stack frame.
-		for (let i = startFrame; i < Math.min(endFrame, words.length); i++) {
-
-			const stackFrame: IRuntimeStackFrame = {
-				index: i,
-				name: `${words[i].name}(${i})`,	// use a word of the line as the stackframe name
-				file: this._sourceFile,
-				line: this.currentLine,
-				column: column, // words[i].index
-				instruction: instruction
-			};
-
-			frames.push(stackFrame);
-		}
+		const frames: IRuntimeStackFrame[] = [{
+			index: 0,
+			name: `Line ${this.currentLine}`,
+			file: this._sourceFile,
+			line: this.currentLine
+		}];
 
 		return {
 			frames: frames,
-			count: words.length
+			count: 1
 		};
 	}
 
