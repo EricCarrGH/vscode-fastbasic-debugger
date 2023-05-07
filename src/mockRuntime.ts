@@ -231,11 +231,6 @@ export class MockRuntime extends EventEmitter {
 		};
 	}
 
-	
-	public setVariable(name: string, value: string) {
-		
-	}
-
 	/*
 	 * Set breakpoint in file with given line.
 	 */
@@ -316,9 +311,6 @@ export class MockRuntime extends EventEmitter {
 
 	// private methods
 
-	private getLine(line?: number): string {
-		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
-	}
 
 	private async loadSource(file: string): Promise<void> {
 		file = this.normalizePathAndCasing(file);
@@ -438,9 +430,7 @@ export class MockRuntime extends EventEmitter {
 				}
 			} else {
 				value = varType === VAR_STRING ? "" : 0;
-			}
-			
-				
+			}	
 		
 			if (typeof value !== 'undefined') {
 
@@ -481,8 +471,6 @@ export class MockRuntime extends EventEmitter {
 
 		// Construct memory dump payload request
 		let requestMemoryDump = new Uint8Array(4*(this.variables.size+1));
-
-		//requestMemoryDump[0] = 2;// Dump memory
 		this.setAtariWord(requestMemoryDump, 0, this._varMinLoc);
 		this.setAtariWord(requestMemoryDump, 2, this._varMemSize);
 		let memDumpIndex = 4;
@@ -498,11 +486,9 @@ export class MockRuntime extends EventEmitter {
 				this.variables.delete(key);
 			}
 		});
-			
 		
 		// Write memory dump file
 		await this.fileAccessor.writeFile(this._debugMemFile, requestMemoryDump);
-
 	}
 
 

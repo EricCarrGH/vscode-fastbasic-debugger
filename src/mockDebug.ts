@@ -26,7 +26,120 @@ import { fastBasicChannel } from './activateMockDebug';
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 
+const DEBUGGER_STUB = `
+DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_BREAK_NEXT
+DIM ___DEBUG_BP(128)
+PROC ___DEBUG_CB ___DEBUG_LINE
+  IF NOT ___DEBUG_BP(0) THEN EXIT
+  IF NOT ___DEBUG_BREAK_NEXT
+    FOR ___DEBUG_I = 1 TO ___DEBUG_BP(0)
+      IF ___DEBUG_LINE = ___DEBUG_BP(___DEBUG_I) THEN EXIT
+    NEXT
+    IF ___DEBUG_I > ___DEBUG_BP(0) THEN EXIT
+  ENDIF
+  '? "[STOPPED @ "; ___DEBUG_LINE; "]"
+  @___DEBUG_DUMP
+  @___DEBUG_POLL
+ENDPROC
 
+PROC ___DEBUG_DUMP
+  close #5:open #5,4,0,"H4:debug.mem"
+  if err()<>1 THEN EXIT 
+  close #4:open #4,8,0,"H4:debug.out"
+  put #4, 1 ' Variable memory dump
+  bput #4, &___DEBUG_LINE, 2
+  ___DEBUG_I=0
+  do
+    ' Retrieve next memory location and length to write out
+    ___DEBUG_MEM = -1:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = -1 then exit
+    
+    ' The first mem/size block is for variables, so we dump the contents of MEM.
+    ' All subsequent blocks are for array/string regions, so we 
+    ' need to dump the contents that MEM *POINTS TO*, and send that new location to the debugger
+    if ___DEBUG_I
+      IF ___DEBUG_MEM>0 THEN ___DEBUG_MEM = dpeek(___DEBUG_MEM)
+       bput #4, &___DEBUG_MEM, 2
+    endif
+
+    INC ___DEBUG_I
+
+    ' String array points to a second array that points to each string
+    if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
+      while ___DEBUG_LEN>0
+          
+          '? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
+          bput #4, &___DEBUG_MEM, 2
+          bput #4, dpeek(___DEBUG_MEM), 256
+          IF ___DEBUG_MEM>0
+            inc ___DEBUG_MEM: inc ___DEBUG_MEM
+          ENDIF
+          ___DEBUG_LEN=___DEBUG_LEN-256
+      wend
+    else
+      
+      bput #4, ___DEBUG_MEM, ___DEBUG_LEN
+
+      ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
+    ENDIF
+    
+    
+  '  ? "wrote (was " ; ___DEBUG_MEMO ; ") @";___DEBUG_MEM; " : "; ___DEBUG_LEN
+    
+  loop
+  close #4
+  close #5
+  XIO #5, 33, 0, 0, "H4:debug.in"
+ENDPROC
+
+PROC ___DEBUG_POLL
+  
+  ' Wait for outgoing file to be removed by debugger
+  do
+    open #5,4,0,"H4:debug.out"
+    if err()<>1
+      close #5:exit
+    endif
+    close #5
+    pause 10
+  loop
+
+  close #5:open #5,4,0,"H4:debug.in"
+  if err()=1 
+    get #5,___DEBUG_MODE
+  '  ? "[DEBUG MODE ";___DEBUG_MODE;"]"
+    if ___DEBUG_MODE=0 or err()<>1 then exit
+
+    if ___DEBUG_MODE=1        ' Continue (to next breakpoint)
+      ___DEBUG_BREAK_NEXT=0
+    elif ___DEBUG_MODE=2      ' Step forward to next line
+      ___DEBUG_BREAK_NEXT=1
+    endif
+ 
+    ' Populate Breakpoint list received from debugger, then continue execution
+    get #5, ___DEBUG_BP(0)
+    bget #5,&___DEBUG_BP+2,___DEBUG_BP(0)*2
+    
+    ' Update any variable memory from debugger
+    do    
+      ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
+      bget #5, ___DEBUG_MEM, ___DEBUG_LEN    
+    loop
+
+    close #5
+  endif
+
+  ' Continue execution
+  ' ? "[CONTINUE]"
+ENDPROC
+
+PROC  ___DEBUG_END
+ get ___DEBUG_I
+ close #4:open #4,8,0,"H4:debug.out"
+ put #4, 9 ' End
+ close #4
+ XIO #5, 33, 0, 0, "H4:debug.in"
+ENDPROC
+`;
 /**
  * This interface describes the fastbasic-debugger specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
@@ -308,7 +421,13 @@ export class MockDebugSession extends LoggingDebugSession {
 				if (error[0].startsWith("BAS compile '")) {
 					error = error.slice(1);
 				}
+				
+				// Remove debugging code from error output
 				let errorMessage = error.join("\n");
+				errorMessage = errorMessage.replace(/:(\d+):(\d+):/gi, (s,row,col) => {
+					return `:${row}:${col-15}: `;
+				} );
+				errorMessage = errorMessage.replace(/@___DEBUG_CB \d+:/gi,"");
 
 				wroteError = errorMessage.length>0;
 				fastBasicChannel.appendLine("\n" + errorMessage);
@@ -323,14 +442,15 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		if (! await this._fileAccessor.doesFileExist(atariExecutable)) {
-			response.success = false;
 			if (!wroteError) {
 				fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
 			}
-			this.sendErrorResponse(response, { 
+			//response.success = false;
+			this.sendEvent(new TerminatedEvent());
+			/*this.sendErrorResponse(response, { 
 				id: 1001,
 				format: `Unable to compile source file.`,
-				showUser: false});
+				showUser: false});*/
 			return undefined;	// abort launch
 		}
 
@@ -350,9 +470,11 @@ export class MockDebugSession extends LoggingDebugSession {
 		let sourceLines = new TextDecoder().decode(await this._fileAccessor.readFile(file)).split(/\r?\n/);
 		sourceLines.unshift("@___DEBUG_POLL");
 		let i=0;
+		let alreadyIncludesDebugger = false;
 		for(i=1;i<sourceLines.length;i++) {
 			// Exit if reaching end (to allow testing debug code post end)
 			if (sourceLines[i] === "'___PROGRAM_END___") {
+				alreadyIncludesDebugger = true;
 				break;
 			}
 			let line = sourceLines[i].trim();
@@ -363,6 +485,9 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 		// Don't end program until key press in debug mode
 		sourceLines.splice(i,0,"@___DEBUG_END");
+		if (!alreadyIncludesDebugger) {
+			sourceLines = sourceLines.concat(DEBUGGER_STUB.split("\n"));
+		}
 
 		// Save the new code
 		this._fileAccessor.writeFile(file, new TextEncoder().encode(sourceLines.join("\n")));
@@ -524,16 +649,17 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
 
 		let vs: RuntimeVariable[] = [];
-
+		let inArray = false;
 		const v = this._variableHandles.get(args.variablesReference);
 		if (v === 'locals') {
 			vs = this._runtime.getLocalVariables();
 		} else if (v && Array.isArray(v.value)) {
 			vs = v.value;
+			inArray = true;
 		}
 
 		response.body = {
-			variables: vs.filter(v=> v.memLoc>0).map(v => this.convertFromRuntime(v))
+			variables: vs.filter(v=> inArray || v.memLoc>0).map(v => this.convertFromRuntime(v))
 		};
 		this.sendResponse(response);
 	}
