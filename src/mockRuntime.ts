@@ -145,7 +145,6 @@ export class MockRuntime extends EventEmitter {
 	private set currentLine(x) {
 		this._currentLine = x;
 	}
-	private currentColumn: number | undefined;
 
 	// This is the next instruction that will be 'executed'
 	public instruction= 0;
@@ -161,9 +160,6 @@ export class MockRuntime extends EventEmitter {
 	private breakpointId = 1;
 
 	private breakAddresses = new Map<string, string>();
-
-	private namedException: string | undefined;
-	private otherExceptions = false;
 
 	constructor(private fileAccessor: FileAccessor) {
 		super();
@@ -306,8 +302,7 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	public setExceptionsFilters(namedException: string | undefined, otherExceptions: boolean): void {
-		this.namedException = namedException;
-		this.otherExceptions = otherExceptions;
+		
 	}
 
 	public setInstructionBreakpoint(address: number): boolean {
@@ -492,7 +487,7 @@ export class MockRuntime extends EventEmitter {
 				}	
 			}		
 		}
-		
+
 		// Construct memory dump payload request
 		let requestMemoryDump = new Uint8Array(4*(this.variables.size+1));
 
@@ -500,17 +495,19 @@ export class MockRuntime extends EventEmitter {
 		this.setAtariWord(requestMemoryDump, 0, this._varMinLoc);
 		this.setAtariWord(requestMemoryDump, 2, this._varMemSize);
 		let memDumpIndex = 4;
-		this.variables.forEach(v => {
-			if (v.memLoc) {
+		Array.from(this.variables.keys()).forEach(key => {
+			let v = this.variables.get(key);
+			if (v) {
 				if(v.type === VAR_STRING || Array.isArray(v.value))  {
 					this.setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
 					this.setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
 					memDumpIndex+=4;
 				}
 			} else {
-				console.error(`Warning! memLoc not found for varible: ${v.name}`);
+				this.variables.delete(key);
 			}
 		});
+			
 		
 		// Write memory dump file
 		await this.fileAccessor.writeFile(this._debugMemFile, requestMemoryDump);
@@ -530,7 +527,7 @@ export class MockRuntime extends EventEmitter {
 
 		switch (packetType) {
 			case 9:
-				this.currentColumn = undefined;
+
 				this.sendEvent('end');
 				break;
 			case 2:
@@ -541,52 +538,48 @@ export class MockRuntime extends EventEmitter {
 	
 			// Parse incoming variable data and populate variables in debugger
 			this.variables.forEach(v => {
-				if (v.memLoc) {
-					let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
-					let arrayLen = v.byteLen / typeLen;
-					switch (v.type) {
-						case VAR_WORD:
-						case VAR_FLOAT:
-						case VAR_STRING:
-							if (arrayLen === 1) {
-								varIndex = v.memLoc-startingLoc;
-								if (v.type === VAR_STRING) {
-									// Update real memory location for this string in case user wants to update it
-									v.memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
-									heapIndex+=2;
-									varIndex = heapIndex;
-									heapIndex+=typeLen;
-								}
-								v.setValueFromSource(this.getAtariValue(debugFileResponse, varIndex, v.type))
-	
-								break;
+				
+				let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
+				let arrayLen = v.byteLen / typeLen;
+				switch (v.type) {
+					case VAR_WORD:
+					case VAR_FLOAT:
+					case VAR_STRING:
+						if (arrayLen === 1) {
+							varIndex = v.memLoc-startingLoc;
+							if (v.type === VAR_STRING) {
+								// Update real memory location for this string in case user wants to update it
+								v.memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
+								heapIndex+=2;
+								varIndex = heapIndex;
+								heapIndex+=typeLen;
 							}
-						case VAR_BYTE:
-							if (arrayLen === 0) {
-								console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
-								break;
-							} 
-							
-							// Update real memory location for this array in case user wants to update it
-							v.memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
-							heapIndex+=2;
-							if (Array.isArray(v.value)) {
-								for(let i=0;i<arrayLen;i++) {
-									if (v.type === VAR_STRING) {
-										// Update real memory location for each string in the array in case user wants to update it
-										v.value[i].memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
-										heapIndex+=2;
-									}
-									v.value[i].setValueFromSource(this.getAtariValue(debugFileResponse, heapIndex, v.type));
-									heapIndex += typeLen;
-								}
-							}
-							
+							v.setValueFromSource(this.getAtariValue(debugFileResponse, varIndex, v.type))
+
 							break;
-					}	
-					
-					
-					
+						}
+					case VAR_BYTE:
+						if (arrayLen === 0) {
+							console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
+							break;
+						} 
+						
+						// Update real memory location for this array in case user wants to update it
+						v.memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
+						heapIndex+=2;
+						if (Array.isArray(v.value)) {
+							for(let i=0;i<arrayLen;i++) {
+								if (v.type === VAR_STRING) {
+									// Update real memory location for each string in the array in case user wants to update it
+									v.value[i].memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
+									heapIndex+=2;
+								}
+								v.value[i].setValueFromSource(this.getAtariValue(debugFileResponse, heapIndex, v.type));
+								heapIndex += typeLen;
+							}
+						}
+						
+						break;
 				} 
 			});
 			// send 'stopped' event

@@ -533,7 +533,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		response.body = {
-			variables: vs.map(v => this.convertFromRuntime(v))
+			variables: vs.filter(v=> v.memLoc>0).map(v => this.convertFromRuntime(v))
 		};
 		this.sendResponse(response);
 	}

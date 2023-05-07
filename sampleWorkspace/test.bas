@@ -68,7 +68,7 @@ PROC ___DEBUG_DUMP
     ' All subsequent blocks are for array/string regions, so we 
     ' need to dump the contents that MEM *POINTS TO*, and send that new location to the debugger
     if ___DEBUG_I
-      ___DEBUG_MEM = dpeek(___DEBUG_MEM)
+      IF ___DEBUG_MEM>0 THEN ___DEBUG_MEM = dpeek(___DEBUG_MEM)
        bput #4, &___DEBUG_MEM, 2
     endif
 
@@ -77,14 +77,17 @@ PROC ___DEBUG_DUMP
     ' String array points to a second array that points to each string
     if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
       while ___DEBUG_LEN>0
+          
           '? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
           bput #4, &___DEBUG_MEM, 2
           bput #4, dpeek(___DEBUG_MEM), 256
-          inc ___DEBUG_MEM: inc ___DEBUG_MEM
+          IF ___DEBUG_MEM>0
+            inc ___DEBUG_MEM: inc ___DEBUG_MEM
+          ENDIF
           ___DEBUG_LEN=___DEBUG_LEN-256
       wend
     else
-      ' Just
+      
       bput #4, ___DEBUG_MEM, ___DEBUG_LEN
 
       ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
