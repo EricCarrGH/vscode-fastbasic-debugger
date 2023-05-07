@@ -1,6 +1,4 @@
 out
-bin
-sampleWorkspace/bin
 dist
 node_modules
 .vscode-test/
@@ -8,3 +6,4 @@ npm-debug.log
 fastbasic-debugger.txt
 *.vsix
 .DS_Store
+/sampleWorkspace/bin
