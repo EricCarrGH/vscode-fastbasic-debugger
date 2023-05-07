@@ -4,6 +4,7 @@ AB%=56.78
 A=1
 B=A+5
 
+
 ? "XYZ"
 dim c4(3), c5(4), c6(5), c5b(4), A4%(3), A5%(4)
 
@@ -14,6 +15,8 @@ dim d2(1) byte, d3(2) byte
 dim j4$(3), j5$(5)
 hw$="Hello World mister cowboy"
 hw$="Hello World"
+
+? A
 
 ? Hw$
 d3(0)=2:d3(1)=100
@@ -63,14 +66,19 @@ PROC ___DEBUG_DUMP
     
     ' The first mem/size block is for variables, so we dump the contents of MEM.
     ' All subsequent blocks are for array/string regions, so we 
-    ' need to dump the contents that MEM *POINTS TO*.
-    if ___DEBUG_I then ___DEBUG_MEM = dpeek(___DEBUG_MEM)
+    ' need to dump the contents that MEM *POINTS TO*, and send that new location to the debugger
+    if ___DEBUG_I
+      ___DEBUG_MEM = dpeek(___DEBUG_MEM)
+       bput #4, &___DEBUG_MEM, 2
+    endif
+
     INC ___DEBUG_I
 
     ' String array points to a second array that points to each string
     if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
       while ___DEBUG_LEN>0
           '? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
+          bput #4, &___DEBUG_MEM, 2
           bput #4, dpeek(___DEBUG_MEM), 256
           inc ___DEBUG_MEM: inc ___DEBUG_MEM
           ___DEBUG_LEN=___DEBUG_LEN-256
@@ -109,20 +117,27 @@ PROC ___DEBUG_POLL
     ? "[DEBUG MODE ";___DEBUG_MODE;"]"
     if ___DEBUG_MODE=0 or err()<>1 then exit
 
-    if ___DEBUG_MODE=1  ' Populate Breakpoint list received from debugger, then continue execution
-      get #5, ___DEBUG_BP(0)
-      bget #5,&___DEBUG_BP+2,___DEBUG_BP(0)*2
-      close #5
-       ___DEBUG_BREAK_NEXT=0
-    elif ___DEBUG_MODE=3 ' Step forward to next line
+    if ___DEBUG_MODE=1        ' Continue (to next breakpoint)
+      ___DEBUG_BREAK_NEXT=0
+    elif ___DEBUG_MODE=3      ' Step forward to next line
       ___DEBUG_BREAK_NEXT=1
     endif
-    close #5
+ 
+    ' Populate Breakpoint list received from debugger, then continue execution
+    get #5, ___DEBUG_BP(0)
+    bget #5,&___DEBUG_BP+2,___DEBUG_BP(0)*2
     
+    ' Update any variable memory from debugger
+    do    
+      ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
+      bget #5, ___DEBUG_MEM, ___DEBUG_LEN    
+    loop
 
+    close #5
   endif
 
- ' ? "[CONTINUE]"
+  ' Continue execution
+  ' ? "[CONTINUE]"
 ENDPROC
 
 PROC  ___DEBUG_END

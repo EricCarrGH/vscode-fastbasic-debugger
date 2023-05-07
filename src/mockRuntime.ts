@@ -37,7 +37,7 @@ interface IRuntimeStack {
 	frames: IRuntimeStackFrame[];
 }
 
-export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
+export type IRuntimeVariableType = number  | string | RuntimeVariable[];
 
 export class RuntimeVariable {
 	private _memory?: Uint8Array;
@@ -45,6 +45,7 @@ export class RuntimeVariable {
 	public reference?: number;
 
 	public memLoc: number = 0;
+	public modified: boolean = false;
 
 	public get value() {
 		return this._value;
@@ -53,6 +54,11 @@ export class RuntimeVariable {
 	public set value(value: IRuntimeVariableType) {
 		this._value = value;
 		this._memory = undefined;
+		this.modified = true;
+	}
+
+	public setValueFromSource(value : IRuntimeVariableType) {
+		this._value = value;
 	}
 
 	public get memory() {
@@ -175,7 +181,7 @@ export class MockRuntime extends EventEmitter {
 			// Load the source, which creates the memory dump file
 			await this.loadSource(program);
 			// Send breakpoints to start communication with the program before launching it
-			await this.sendBreakpoints();
+			await this.sendBreakpointsAndVars(1);
 		}
 
 			// send 'stopped' event
@@ -205,7 +211,7 @@ export class MockRuntime extends EventEmitter {
 
 		// Write payload
 		//await this.sendPayloadToProgram(payload);
-		await this.sendBreakpoints();
+		await this.sendBreakpointsAndVars(1);
 		await this.waitOnProgram();
 	}
 
@@ -213,11 +219,11 @@ export class MockRuntime extends EventEmitter {
 	 * Step forward to the next line.
 	 */
 	public async step() {
-		let payload = new Uint8Array(1);
-		payload[0] = 3;// Step forward
+		//let payload = new Uint8Array(1);
+		//payload[0] = 3;// Step forward
 
 		// Write payload
-		await this.sendPayloadToProgram(payload);
+		await this.sendBreakpointsAndVars(3);
 		await this.waitOnProgram();
 	}
 
@@ -236,6 +242,11 @@ export class MockRuntime extends EventEmitter {
 			frames: frames,
 			count: 1
 		};
+	}
+
+	
+	public setVariable(name: string, value: string) {
+		
 	}
 
 	/*
@@ -540,10 +551,13 @@ export class MockRuntime extends EventEmitter {
 							if (arrayLen === 1) {
 								varIndex = v.memLoc-startingLoc;
 								if (v.type === VAR_STRING) {
+									// Update real memory location for this string in case user wants to update it
+									v.memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
+									heapIndex+=2;
 									varIndex = heapIndex;
 									heapIndex+=typeLen;
 								}
-								v.value = this.getAtariValue(debugFileResponse, varIndex, v.type);
+								v.setValueFromSource(this.getAtariValue(debugFileResponse, varIndex, v.type))
 	
 								break;
 							}
@@ -552,9 +566,20 @@ export class MockRuntime extends EventEmitter {
 								console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
 								break;
 							} 
-							for(let i=0;i<arrayLen;i++) {
-								v.value[i].value = this.getAtariValue(debugFileResponse, heapIndex, v.type);
-								heapIndex += typeLen;
+							
+							// Update real memory location for this array in case user wants to update it
+							v.memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
+							heapIndex+=2;
+							if (Array.isArray(v.value)) {
+								for(let i=0;i<arrayLen;i++) {
+									if (v.type === VAR_STRING) {
+										// Update real memory location for each string in the array in case user wants to update it
+										v.value[i].memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
+										heapIndex+=2;
+									}
+									v.value[i].setValueFromSource(this.getAtariValue(debugFileResponse, heapIndex, v.type));
+									heapIndex += typeLen;
+								}
 							}
 							
 							break;
@@ -581,18 +606,48 @@ export class MockRuntime extends EventEmitter {
 		await this.fileAccessor.deleteFile(this._debugFileFromProg);
 	}
 
-	private async sendBreakpoints(): Promise<void> {
+	private async sendBreakpointsAndVars(messageMode: number): Promise<void> {
 		const bps = this.breakPoints.get(this._sourceFile) ?? new Array<IRuntimeBreakpoint>();
 		
-		let payload = new Uint8Array(1+2*bps.length);
-
-		payload[0] = 1;// Send Breakpoints
+		let payload = new Uint8Array(16000);
+		
+		
+		payload[0] = messageMode;// Send Breakpoints and vars
 		payload[1] = bps.length;// Number of breakpoints
 
 		for (let i=0;i<bps.length;i++) {
 			this.setAtariWord(payload,2+i*2, bps[i].line);
 		}
 
+		// Send any variables to update in form of [word:location][word:length][data]
+		let index = 2+2*bps.length;
+		
+		this.variables.forEach(v => {
+			if (v.memLoc && v.modified) {
+				v.modified = false;
+				if(Array.isArray(v.value))  {
+					v.value.forEach(va => {
+						if (va.modified) {
+							va.modified=false;
+							this.setAtariWord(payload, index, va.memLoc);
+							this.setAtariWord(payload, index+2, va.byteLen);
+							if (!Array.isArray(va.value)) {
+								index += this.setAtariValue(payload, index+4, va.type, va.value);
+							}
+							index+=4;
+						}
+					});
+				} else {
+					this.setAtariWord(payload, index, v.memLoc);
+					this.setAtariWord(payload, index+2, v.byteLen);
+					index += this.setAtariValue(payload, index+4, v.type, v.value);
+					index+=4;
+				}
+				
+			} 
+		});
+
+		payload = payload.slice(0,index);
 		// Write payload
 		await this.sendPayloadToProgram(payload);
 	}
@@ -623,6 +678,24 @@ export class MockRuntime extends EventEmitter {
 			case VAR_BYTE : return array[offset];
 			case VAR_FLOAT: return 12.34; // TODO - parsee Atari 6-byte BCD
 			case VAR_STRING: return new TextDecoder().decode(array.slice(offset+1,offset+array[offset]+1));
+			default: return 0;
+		}
+	}
+
+	private setAtariValue(array:Uint8Array, offset: number, type: string, value: number | string) : number {
+		switch (type) {
+			case VAR_WORD : 
+				array[offset] = Number(value) % 256; array[offset+1] = Number(value)/256;
+				return 2;
+			case VAR_BYTE : 
+				array[offset] = Number(value) % 256;
+				return 1;
+			case VAR_FLOAT: 
+				return 6; // TODO - parsee Atari 6-byte BCD
+			case VAR_STRING: 
+				array[offset] = String(value).length;
+				array.set(new TextEncoder().encode(String(value)), offset+1);
+				return array[offset]+1;
 			default: return 0;
 		}
 	}

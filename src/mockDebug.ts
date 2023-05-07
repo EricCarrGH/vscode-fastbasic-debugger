@@ -539,6 +539,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
+		
 		const container = this._variableHandles.get(args.variablesReference);
 		const rv = container === 'locals'
 			? this._runtime.getLocalVariable(args.name)
@@ -549,11 +550,17 @@ export class MockDebugSession extends LoggingDebugSession {
 		if (rv) {
 			rv.value = this.convertToRuntime(args.value);
 			response.body = this.convertFromRuntime(rv);
-
-			if (rv.memory && rv.reference) {
-				this.sendEvent(new MemoryEvent(String(rv.reference), 0, rv.memory.length));
+			if (container instanceof RuntimeVariable && container.memLoc) {
+				container.modified = true;
 			}
+
+			//if (rv.memory && rv.reference) {
+//				this.sendEvent(new MemoryEvent(String(rv.reference), 0, 2)); //rv.memory.length));
+		//	}
 		}
+	//	this._runtime.setVariable(args.name, args.value);
+	//	this.sendResponse(response);
+	//	return;
 
 		this.sendResponse(response);
 	}
@@ -732,12 +739,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		value= value.trim();
 
-		if (value === 'true') {
-			return true;
-		}
-		if (value === 'false') {
-			return false;
-		}
 		if (value[0] === '\'' || value[0] === '"') {
 			return value.substr(1, value.length-2);
 		}
