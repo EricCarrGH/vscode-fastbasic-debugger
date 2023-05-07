@@ -24,19 +24,7 @@ export interface IRuntimeBreakpoint {
 }
 
 
-interface IRuntimeStackFrame {
-	index: number;
-	name: string;
-	file: string;
-	line: number;
-	column?: number;
-	instruction?: number;
-}
 
-interface IRuntimeStack {
-	count: number;
-	frames: IRuntimeStackFrame[];
-}
 
 interface RuntimeDisassembledInstruction {
 	address: number;
@@ -187,11 +175,11 @@ export class MockRuntime extends EventEmitter {
 		if (debug) {
 			// Load the source, which creates the memory dump file
 			await this.loadSource(program);
-			// Create a send breakpoints file to start communication with the program
+			// Send breakpoints to start communication with the program before launching it
 			await this.sendBreakpoints();
 		}
 
-		// Run the executable in theemulator
+		// Run the program in the emulator
 		cp.execFile(`${emulatorPath}`,["/singleinstance","/run", executable ], (err, stdout) => {
 			if (err) {
 				fastBasicChannel.appendLine(err.message);//.substring(err.message.indexOf("\n")));
@@ -199,7 +187,8 @@ export class MockRuntime extends EventEmitter {
 			fastBasicChannel.appendLine(stdout);
 		});
 
-		this.continue(false);
+		// Wait for the program to initiate a breakpoint
+		await this.mainWaitLoop();
 
 		/*if (debug) {
 		
@@ -212,6 +201,12 @@ export class MockRuntime extends EventEmitter {
 		} else {
 			this.continue(false);
 		}*/
+	}
+
+	private async mainWaitLoop() {
+		//while (true) {
+      await this.processProgramResponse();
+		//}
 	}
 
 	/**
@@ -304,42 +299,6 @@ export class MockRuntime extends EventEmitter {
 			}
 		}
 		this.sendEvent('stopOnStep');
-	}
-
-	/**
-	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
-	 */
-	public stack(startFrame: number, endFrame: number): IRuntimeStack {
-
-		const line = this.getLine();
-		const words = this.getWords(this.currentLine, line);
-		words.push({ name: 'BOTTOM', line: -1, index: -1 });	// add a sentinel so that the stack is never empty...
-
-		// if the line contains the word 'disassembly' we support to "disassemble" the line by adding an 'instruction' property to the stackframe
-		const instruction = line.indexOf('disassembly') >= 0 ? this.instruction : undefined;
-
-		const column = typeof this.currentColumn === 'number' ? this.currentColumn : undefined;
-
-		const frames: IRuntimeStackFrame[] = [];
-		// every word of the current line becomes a stack frame.
-		for (let i = startFrame; i < Math.min(endFrame, words.length); i++) {
-
-			const stackFrame: IRuntimeStackFrame = {
-				index: i,
-				name: `${words[i].name}(${i})`,	// use a word of the line as the stackframe name
-				file: this._sourceFile,
-				line: this.currentLine,
-				column: column, // words[i].index
-				instruction: instruction
-			};
-
-			frames.push(stackFrame);
-		}
-
-		return {
-			frames: frames,
-			count: words.length
-		};
 	}
 
 	/*
@@ -781,7 +740,7 @@ export class MockRuntime extends EventEmitter {
 		return false;
 	}
 
-	private async readProgramResponse(): Promise<void> {
+	private async processProgramResponse(): Promise<void> {
 
 		// Wait for response
 		await this.fileAccessor.waitUntilFileDoesNotExist(this._debugFileToProg);
@@ -843,9 +802,11 @@ export class MockRuntime extends EventEmitter {
 		
 		let payload = new Uint8Array(1+2*bps.length);
 
-		payload[0] = 1;// Dump memory
+		payload[0] = 1;// Send Breakpoints
+		payload[1] = bps.length;// Number of breakpoints
+
 		for (let i=0;i<bps.length;i++) {
-			this.setAtariWord(payload,1+i*2, bps[i].line);
+			this.setAtariWord(payload,2+i*2, bps[i].line);
 		}
 
 		// Write payload
@@ -867,17 +828,17 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	
-	private setAtariWord(array:Uint8Array, index: number, value: number) {
-		array[index] = value % 256;
-		array[index+1] = value/256;
+	private setAtariWord(array:Uint8Array, offset: number, value: number) {
+		array[offset] = value % 256;
+		array[offset+1] = value/256;
 	}
 
-	private getAtariValue(array:Uint8Array, index: number, type: string)  {
+	private getAtariValue(array:Uint8Array, offset: number, type: string)  {
 		switch (type) {
-			case VAR_WORD : return array[index] + array[index+1]*256;
-			case VAR_BYTE : return array[index];
+			case VAR_WORD : return array[offset] + array[offset+1]*256;
+			case VAR_BYTE : return array[offset];
 			case VAR_FLOAT: return 12.34; // TODO - parsee Atari 6-byte BCD
-			case VAR_STRING: return new TextDecoder().decode(array.slice(index+1,index+array[index]+1));
+			case VAR_STRING: return new TextDecoder().decode(array.slice(offset+1,offset+array[offset]+1));
 			default: return 0;
 		}
 	}

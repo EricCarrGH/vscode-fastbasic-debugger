@@ -198,9 +198,9 @@ export const workspaceFileAccessor: FileAccessor = {
 	async writeFile(path: string, contents: Uint8Array) {
 		await vscode.workspace.fs.writeFile(pathToUri(path), contents);
 	}, 
-	async waitUntilFileDoesNotExist(path: string) {
-		// let waitedMs=0;
-		//timeoutMs= timeoutMs || 0;
+	async waitUntilFileDoesNotExist(path: string, timeoutMs?: number) : Promise<boolean> {
+		let timeout = timeoutMs ?? 0;
+		let waitedMs = 0;
 		while (true) {
 			try {
 				let uri = vscode.Uri.file(path);
@@ -210,10 +210,10 @@ export const workspaceFileAccessor: FileAccessor = {
 				return true;
 			}
 			await new Promise(resolve => setTimeout(resolve, 125));
-			//waitedMs+=125;
-			//if (timeoutMs && waitedMs>=timeoutMs) {
-				//return false;
-			//}
+			waitedMs+=125;
+			if (timeout>0 && waitedMs>=timeout) {
+				return false;
+			}
 		}
 	},
 	async waitUntilFileExists(path: string, timeoutMs?: number) : Promise<boolean> {
@@ -237,7 +237,6 @@ export const workspaceFileAccessor: FileAccessor = {
 			await vscode.workspace.fs.stat(uri);
 			return true;
 		} catch (e) {
-			let f=e;
 			// Once we get an exception (file does not exist. return)
 		}
 		return false;

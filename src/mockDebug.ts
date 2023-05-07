@@ -67,7 +67,7 @@ import {
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	InvalidatedEvent,
-	Thread, StackFrame, Scope, Source, Handles, Breakpoint, MemoryEvent
+	Scope, Source, Handles, Breakpoint, MemoryEvent
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
@@ -121,7 +121,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _valuesInHex = false;
 	private _useInvalidatedEvent = false;
 
-	private _addressesInHex = true;
   private _fileAccessor : FileAccessor;
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
@@ -267,7 +266,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportSuspendDebuggee = true;
 		response.body.supportTerminateDebuggee = true;
 		response.body.supportsFunctionBreakpoints = true;
-		response.body.supportsDelayedStackTraceLoading = true;
 
 		this.sendResponse(response);
 
@@ -390,7 +388,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			this.sendResponse(response);
 			return undefined;
 		}
-
+		
 		// start the program in the runtime
 		await this._runtime.start(file, !!args.stopOnEntry, !args.noDebug, args.emulatorPath, atariExecutable);
 		this.sendResponse(response);
@@ -473,62 +471,19 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected exceptionInfoRequest(response: DebugProtocol.ExceptionInfoResponse, args: DebugProtocol.ExceptionInfoArguments) {
-		response.body = {
-			exceptionId: 'Exception ID',
-			description: 'This is a descriptive description of the exception.',
-			breakMode: 'always',
-			details: {
-				message: 'Message contained in the exception.',
-				typeName: 'Short type name of the exception object',
-				stackTrace: 'stack frame 1\nstack frame 2',
-			}
-		};
-		this.sendResponse(response);
-	}
 
-	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
+	// protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
 
-		// runtime supports no threads so just return a default thread.
-		response.body = {
-			threads: [
-				new Thread(MockDebugSession.threadID, "thread 1"),
-				new Thread(MockDebugSession.threadID + 1, "thread 2"),
-			]
-		};
-		this.sendResponse(response);
-	}
+	// 	// runtime supports no threads so just return a default thread.
+	// 	response.body = {
+	// 		threads: [
+	// 			new Thread(MockDebugSession.threadID, "thread 1"),
+	// 			new Thread(MockDebugSession.threadID + 1, "thread 2"),
+	// 		]
+	// 	};
+	// 	this.sendResponse(response);
+	// }
 
-	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
-
-		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
-		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
-		const endFrame = startFrame + maxLevels;
-
-		const stk = this._runtime.stack(startFrame, endFrame);
-
-		response.body = {
-			stackFrames: stk.frames.map((f, ix) => {
-				const sf: DebugProtocol.StackFrame = new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line));
-				if (typeof f.column === 'number') {
-					sf.column = this.convertDebuggerColumnToClient(f.column);
-				}
-				if (typeof f.instruction === 'number') {
-					const address = this.formatAddress(f.instruction);
-					sf.name = `${f.name} ${address}`;
-					sf.instructionPointerReference = address;
-				}
-
-				return sf;
-			}),
-			// 4 options for 'totalFrames':
-			//omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
-			totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
-			//totalFrames: 1000000 			// not the correct size, should result in a max. of two requests
-			//totalFrames: endFrame + 20 	// dynamically increases the size with every requested chunk, results in paging
-		};
-		this.sendResponse(response);
-	}
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
 
@@ -888,9 +843,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		return dapVariable;
 	}
 
-	private formatAddress(x: number, pad = 8) {
-		return this._addressesInHex ? '0x' + x.toString(16).padStart(8, '0') : x.toString(10);
-	}
 
 	private formatNumber(x: number) {
 		return this._valuesInHex ? '0x' + x.toString(16) : x.toString(10);

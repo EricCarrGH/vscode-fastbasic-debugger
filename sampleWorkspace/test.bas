@@ -1,3 +1,4 @@
+@__DEBUG_POLL
 AA%=12.34
 AB%=56.78
 
@@ -37,14 +38,21 @@ mem=&hw$:bput #5,&mem,2:size=256:bput #5,&size,2
 close #5:___DEBUG_ERR=err()
 ENDPROC
 
-@___DEBUG_BP 1
 GET ___DEBUG_KEY
 end
 
-DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN
-PROC ___DEBUG_BP ___DEBUG_LINE
+DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_BP(128), ___DEBUG_I
+PROC ___DEBUG_CB ___DEBUG_LINE
+  IF NOT ___DEBUG_BP(0) THEN EXIT
+  FOR ___DEBUG_I = 1 TO ___DEBUG_BP(0)
+    IF ___DEBUG_LINE = ___DEBUG_BP(___DEBUG_I) THEN EXIT
+  NEXT
+  IF ___DEBUG_I > ___DEBUG_BP(0) THEN EXIT
   ? "[BREAKPOINT]"
+  @__DEBUG_POLL
+ENDPROC
 
+PROC __DEBUG_POLL
   close #5
   do
     open #5,4,0,"H4:debug.in"
@@ -52,10 +60,15 @@ PROC ___DEBUG_BP ___DEBUG_LINE
       get #5,___DEBUG_MODE
       ? "[DEBUG MODE ";___DEBUG_MODE;"]"
       if ___DEBUG_MODE=0 or err()<>1 then exit
-  
-      if ___DEBUG_MODE=2  ' Dump memory to debugger. Multiples of (word loc, byte len)
-      
-        close #4:open #4,8,0,"H4:debug.out"
+
+      if ___DEBUG_MODE=1  ' Populate Breakpoint list received from debugger
+        get #5, ___DEBUG_BP(0)
+        bget #5,&___DEBUG_BP+2,___DEBUG_BP(0)*2
+        close #5
+        exit
+      elif ___DEBUG_MODE=2  ' Dump memory to debugger. Multiples of (word loc, byte len)
+         close #4:open #4,8,0,"H4:debug.out"
+       
         do
           ' Retrieve next memory location and length to write out
           ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
