@@ -33,7 +33,7 @@ j5$(4)="TEST-4-MANUAL"
 
 '___PROGRAM_END___
 
-DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I
+DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_BREAK_NEXT
 DIM ___DEBUG_BP(128)
 PROC ___DEBUG_CB ___DEBUG_LINE
   IF NOT ___DEBUG_BP(0) THEN EXIT
@@ -75,7 +75,7 @@ PROC ___DEBUG_DUMP
       ' Just
       bput #4, ___DEBUG_MEM, ___DEBUG_LEN
 
-      ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
+       if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
     ENDIF
     
     
@@ -88,9 +88,22 @@ PROC ___DEBUG_DUMP
 ENDPROC
 
 PROC ___DEBUG_POLL
-  close #5
+  
+  ' Wait for outgoing file to be removed by debugger
   do
-    open #5,4,0,"H4:debug.in"
+    pause 20 
+    open #5,4,0,"H4:debug.out"
+    if err()<>1
+      close #5:exit
+    endif
+    close #5
+    
+    ? "[Waiting on debugger]"
+  loop
+
+ ' Process incoming file 
+  'do
+    close #5:open #5,4,0,"H4:debug.in"
     if err()=1 
       get #5,___DEBUG_MODE
       ? "[DEBUG MODE ";___DEBUG_MODE;"]"
@@ -100,19 +113,26 @@ PROC ___DEBUG_POLL
         get #5, ___DEBUG_BP(0)
         bget #5,&___DEBUG_BP+2,___DEBUG_BP(0)*2
         close #5
-        exit
-      elif ___DEBUG_MODE=2  ' Dump memory to debugger. Multiples of (word loc, byte len)
-        
+      elif ___DEBUG_MODE=4 ' Continue
+        ___DEBUG_BREAK_NEXT=0
       elif ___DEBUG_MODE=3 ' Read and update memory from debugger. Multiples of (word loc, byte len)
 
       endif
       close #5
-      XIO #5, 33, 0, 0, "H4:debug.in"
+      
       'get k
     endif
-    pause 10
-  loop
+    
+   ' pause 10
+  'loop
 
-  ? "[RESUME]"
+  ? "[CONTINUE]"
 ENDPROC
 
+PROC  ___DEBUG_END
+ get ___DEBUG_I
+ close #4:open #4,8,0,"H4:debug.out"
+ put #4, 9 ' End
+ close #4
+ XIO #5, 33, 0, 0, "H4:debug.in"
+ENDPROC

@@ -211,7 +211,7 @@ export class MockRuntime extends EventEmitter {
 		});
 		
 		// Wait for the program to initiate a breakpoint
-		await this.mainWaitLoop();
+		await this.waitOnProgram();
 
 		/*if (debug) {
 		
@@ -226,26 +226,18 @@ export class MockRuntime extends EventEmitter {
 		}*/
 	}
 
-	private async mainWaitLoop() {
-		//while (true) {
-      await this.processProgramResponse();
-		//	this.findNextStatement(false, "stopOnEntry");
-		//}
-	}
 
 	/**
 	 * Continue execution to the end/beginning.
 	 */
-	public continue(reverse: boolean) {
+	public async continue(reverse: boolean) {
+		let payload = new Uint8Array(1);
 
-		while (!this.executeLine(this.currentLine, reverse)) {
-			if (this.updateCurrentLine(reverse)) {
-				break;
-			}
-			if (this.findNextStatement(reverse)) {
-				break;
-			}
-		}
+		payload[0] = 4;// Continue
+
+		// Write payload
+		await this.sendPayloadToProgram(payload);
+		await this.waitOnProgram();
 	}
 
 	/**
@@ -506,10 +498,10 @@ export class MockRuntime extends EventEmitter {
 			var folderDelimiter = isWindows ? "\\" : "/";
 
 			let symbolFileParts = file.split(folderDelimiter);
-			symbolFileParts[symbolFileParts.length-1] ="bin/" + symbolFileParts[symbolFileParts.length-1].split(".",1)[0];
+			symbolFileParts[symbolFileParts.length-1] ="bin" + folderDelimiter + symbolFileParts[symbolFileParts.length-1].split(".",1)[0];
 			let symbolFile = symbolFileParts.join(folderDelimiter);
 
-			symbolFileParts[symbolFileParts.length-1] ="bin/debug.";
+			symbolFileParts[symbolFileParts.length-1] ="bin" + folderDelimiter + "debug.";
 			this._debugFileToProg= symbolFileParts.join(folderDelimiter) + "in";
 			this._debugFileFromProg = symbolFileParts.join(folderDelimiter) + "out";
 			this._debugMemFile = symbolFileParts.join(folderDelimiter) + "mem";
@@ -804,17 +796,21 @@ export class MockRuntime extends EventEmitter {
 		return false;
 	}
 
-	private async processProgramResponse(): Promise<void> {
+	private async waitOnProgram(): Promise<void> {
 
 		// Wait for response
 		await this.fileAccessor.waitUntilFileDoesNotExist(this._debugFileToProg);
-
+    
 		// Parse response and update vars
 		let debugFileResponse = await this.fileAccessor.readFile(this._debugFileFromProg);
 
 		let packetType = debugFileResponse[0];
 
 		switch (packetType) {
+			case 9:
+				this.currentColumn = undefined;
+				this.sendEvent('end');
+				break;
 			case 2:
 			let currentLine = this.getAtariValue(debugFileResponse, 1, VAR_WORD) ;
 			let varIndex = 0;

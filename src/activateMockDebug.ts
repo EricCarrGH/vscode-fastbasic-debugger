@@ -206,7 +206,7 @@ export const workspaceFileAccessor: FileAccessor = {
 				let uri = vscode.Uri.file(path);
 				await vscode.workspace.fs.stat(uri);
 			} catch (e) {
-				// Once we get an exception (file does not exist. return)
+				// When we get an exception (file does not exist. return)
 				return true;
 			}
 			await new Promise(resolve => setTimeout(resolve, 125));
