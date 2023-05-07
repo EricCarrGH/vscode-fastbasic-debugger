@@ -202,11 +202,6 @@ export class MockRuntime extends EventEmitter {
 	 * Continue execution to the next breakpoint or end of program
 	 */
 	public async continue() {
-		//let payload = new Uint8Array(1);
-		//payload[0] = 4;// Continue
-
-		// Write payload
-		//await this.sendPayloadToProgram(payload);
 		await this.sendBreakpointsAndVars(1);
 		await this.waitOnProgram();
 	}
@@ -215,11 +210,7 @@ export class MockRuntime extends EventEmitter {
 	 * Step forward to the next line.
 	 */
 	public async step() {
-		//let payload = new Uint8Array(1);
-		//payload[0] = 3;// Step forward
-
-		// Write payload
-		await this.sendBreakpointsAndVars(3);
+		await this.sendBreakpointsAndVars(2);
 		await this.waitOnProgram();
 	}
 
@@ -527,10 +518,9 @@ export class MockRuntime extends EventEmitter {
 
 		switch (packetType) {
 			case 9:
-
 				this.sendEvent('end');
 				break;
-			case 2:
+			case 1:
 			let currentLine = this.getAtariValue(debugFileResponse, 1, VAR_WORD) ;
 			let varIndex = 0;
 			let startingLoc = this._varMinLoc - 3;
@@ -684,7 +674,7 @@ export class MockRuntime extends EventEmitter {
 				array[offset] = Number(value) % 256;
 				return 1;
 			case VAR_FLOAT: 
-				return 6; // TODO - parsee Atari 6-byte BCD
+				return 6; // TODO - parse Atari 6-byte BCD
 			case VAR_STRING: 
 				array[offset] = String(value).length;
 				array.set(new TextEncoder().encode(String(value)), offset+1);

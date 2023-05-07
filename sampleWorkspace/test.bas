@@ -58,7 +58,7 @@ PROC ___DEBUG_DUMP
   if err()<>1 THEN EXIT 
   close #4:open #4,8,0,"H4:debug.out"
   put #4, 2 ' Variable memory dump
-  bput #4, &___DEBUG_LINE, 2
+  bput #4, &___DEBUG_LINE, 1
   ___DEBUG_I=0
   do
     ' Retrieve next memory location and length to write out
@@ -122,7 +122,7 @@ PROC ___DEBUG_POLL
 
     if ___DEBUG_MODE=1        ' Continue (to next breakpoint)
       ___DEBUG_BREAK_NEXT=0
-    elif ___DEBUG_MODE=3      ' Step forward to next line
+    elif ___DEBUG_MODE=2      ' Step forward to next line
       ___DEBUG_BREAK_NEXT=1
     endif
  
