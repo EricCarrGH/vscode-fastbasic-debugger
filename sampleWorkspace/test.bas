@@ -1,4 +1,3 @@
-@__DEBUG_POLL
 AA%=12.34
 AB%=56.78
 
@@ -29,17 +28,10 @@ j5$(4)="TEST-4-MANUAL"
 ? "i: "; i; " @ "; &i
 
 
-PROC TESTS
-' Test memory dump 
-open #5,8,0,"H4:debug.in"
-put #5, 2 ' memory dump
-mem=&a:bput #5,&mem,2:size=22:bput #5,&size,2
-mem=&hw$:bput #5,&mem,2:size=256:bput #5,&size,2
-close #5:___DEBUG_ERR=err()
-ENDPROC
 
-GET ___DEBUG_KEY
-end
+
+
+'___PROGRAM_END___
 
 DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_BP(128), ___DEBUG_I
 PROC ___DEBUG_CB ___DEBUG_LINE
@@ -48,11 +40,51 @@ PROC ___DEBUG_CB ___DEBUG_LINE
     IF ___DEBUG_LINE = ___DEBUG_BP(___DEBUG_I) THEN EXIT
   NEXT
   IF ___DEBUG_I > ___DEBUG_BP(0) THEN EXIT
-  ? "[BREAKPOINT]"
-  @__DEBUG_POLL
+  ? "[BREAKPOINT @ "; ___DEBUG_LINE; "]"
+  @___DEBUG_DUMP
+  @___DEBUG_POLL
 ENDPROC
 
-PROC __DEBUG_POLL
+PROC ___DEBUG_DUMP
+  close #5:open #5,4,0,"H4:debug.mem"
+  if err()<>1 THEN EXIT 
+  close #4:open #4,8,0,"H4:debug.out"
+  
+  do
+    ' Retrieve next memory location and length to write out
+    ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
+    
+    ' The first mem/size block is for variables, so we dump the contents of MEM.
+    ' All subsequent blocks are for array/string regions, so we 
+    ' need to dump the contents that MEM *POINTS TO*.
+    if ___DEBUG_MODE=1002 then ___DEBUG_MEM = dpeek(___DEBUG_MEM)
+    ___DEBUG_MODE=1002
+
+    ' String array points to a second array that points to each string
+    if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
+      while ___DEBUG_LEN>0
+        '  ? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
+          bput #4, dpeek(___DEBUG_MEM), 256
+          inc ___DEBUG_MEM: inc ___DEBUG_MEM
+          ___DEBUG_LEN=___DEBUG_LEN-256
+      wend
+    else
+      ' Just
+      bput #4, ___DEBUG_MEM, ___DEBUG_LEN
+
+      ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
+    ENDIF
+    
+    
+  '  ? "wrote (was " ; ___DEBUG_MEMO ; ") @";___DEBUG_MEM; " : "; ___DEBUG_LEN
+    
+  loop
+  close #4
+  close #5
+  XIO #5, 33, 0, 0, "H4:debug.in"
+ENDPROC
+
+PROC ___DEBUG_POLL
   close #5
   do
     open #5,4,0,"H4:debug.in"
@@ -67,39 +99,7 @@ PROC __DEBUG_POLL
         close #5
         exit
       elif ___DEBUG_MODE=2  ' Dump memory to debugger. Multiples of (word loc, byte len)
-         close #4:open #4,8,0,"H4:debug.out"
-       
-        do
-          ' Retrieve next memory location and length to write out
-          ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
-          
-          ' The first mem/size block is for variables, so we dump the contents of MEM.
-          ' All subsequent blocks are for array/string regions, so we 
-          ' need to dump the contents that MEM *POINTS TO*.
-          ___DEBUG_MEMO = ___DEBUG_MEM
-          if ___DEBUG_MODE=1002 then ___DEBUG_MEM = dpeek(___DEBUG_MEM)
-          ___DEBUG_MODE=1002
-
-          ' String array points to a second array that points to each string
-          if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
-            while ___DEBUG_LEN>0
-             '  ? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
-               bput #4, dpeek(___DEBUG_MEM), 256
-               inc ___DEBUG_MEM: inc ___DEBUG_MEM
-               ___DEBUG_LEN=___DEBUG_LEN-256
-            wend
-          else
-            ' Just
-            bput #4, ___DEBUG_MEM, ___DEBUG_LEN
-
-           ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
-          ENDIF
-          
-          
-        '  ? "wrote (was " ; ___DEBUG_MEMO ; ") @";___DEBUG_MEM; " : "; ___DEBUG_LEN
-          
-        loop
-        close #4
+        
       elif ___DEBUG_MODE=3 ' Read and update memory from debugger. Multiples of (word loc, byte len)
 
       endif

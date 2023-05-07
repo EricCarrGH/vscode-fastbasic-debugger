@@ -206,6 +206,7 @@ export class MockRuntime extends EventEmitter {
 	private async mainWaitLoop() {
 		//while (true) {
       await this.processProgramResponse();
+		//	this.findNextStatement(false, "stopOnEntry");
 		//}
 	}
 
@@ -588,9 +589,9 @@ export class MockRuntime extends EventEmitter {
 		}
 		
 		// Construct memory dump payload request
-		let requestMemoryDump = new Uint8Array(1+4*(this.variables.size+1));
+		let requestMemoryDump = new Uint8Array(4*(this.variables.size+1));
 
-		requestMemoryDump[0] = 2;// Dump memory
+		//requestMemoryDump[0] = 2;// Dump memory
 		this.setAtariWord(requestMemoryDump, 1, this._varMinLoc);
 		this.setAtariWord(requestMemoryDump, 3, this._varMemSize);
 		let memDumpIndex = 5;
@@ -787,6 +788,8 @@ export class MockRuntime extends EventEmitter {
 				
 			} 
 		});
+			// send 'stopped' event
+			this.sendEvent('stopOnBreakpoint');
 	}
 
 	private async sendPayloadToProgram(payload: Uint8Array) {

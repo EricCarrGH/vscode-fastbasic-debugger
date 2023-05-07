@@ -332,6 +332,9 @@ export class MockDebugSession extends LoggingDebugSession {
 		// Copy the source file to the bin folder 
 		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder+folderDelimiter+filename));
     
+		// Inject debugger code into the bin source file copy
+		await this.injectDebuggerCode(binFolder+folderDelimiter+filename);
+
 		// Check if the compiler exists
 		if (!await this._fileAccessor.doesFileExist(args.compilerPath)) {
 			response.success = false;
@@ -388,11 +391,31 @@ export class MockDebugSession extends LoggingDebugSession {
 			this.sendResponse(response);
 			return undefined;
 		}
-		
+
 		// start the program in the runtime
 		await this._runtime.start(file, !!args.stopOnEntry, !args.noDebug, args.emulatorPath, atariExecutable);
 		this.sendResponse(response);
 	}
+
+	private async injectDebuggerCode(file: string) {
+		let sourceLines = new TextDecoder().decode(await this._fileAccessor.readFile(file)).split(/\r?\n/);
+		sourceLines.unshift("@___DEBUG_POLL");
+		let i=0;
+		for(i=1;i<sourceLines.length;i++) {
+			// Exit if reaching end (to allow testing debug code post end)
+			if (sourceLines[i] === "'___PROGRAM_END___") {
+				break;
+			}
+			sourceLines[i] = `@___DEBUG_CB ${i}:${sourceLines[i]}`;
+		}
+		// Don't end program until key press in debug mode
+		sourceLines.splice(i,0,"GET ___DEBUG_KEY");
+
+		// Save the new code
+		this._fileAccessor.writeFile(file, new TextEncoder().encode(sourceLines.join("\n")));
+	}
+	
+
 
 	protected setFunctionBreakPointsRequest(response: DebugProtocol.SetFunctionBreakpointsResponse, args: DebugProtocol.SetFunctionBreakpointsArguments, request?: DebugProtocol.Request): void {
 		this.sendResponse(response);
@@ -436,7 +459,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			};
 		} else {
 			response.body = {
-				breakpoints: []
+				breakpoints: [{line:0, column:0}]
 			};
 		}
 		this.sendResponse(response);
@@ -710,39 +733,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 	}
 
-	protected disassembleRequest(response: DebugProtocol.DisassembleResponse, args: DebugProtocol.DisassembleArguments) {
-
-		const baseAddress = parseInt(args.memoryReference);
-		const offset = args.instructionOffset || 0;
-		const count = args.instructionCount;
-
-		const isHex = args.memoryReference.startsWith('0x');
-		const pad = isHex ? args.memoryReference.length-2 : args.memoryReference.length;
-
-		const loc = this.createSource(this._runtime.sourceFile);
-
-		let lastLine = -1;
-
-		const instructions = this._runtime.disassemble(baseAddress+offset, count).map(instruction => {
-			const address = instruction.address.toString(isHex ? 16 : 10).padStart(pad, '0');
-			const instr : DebugProtocol.DisassembledInstruction = {
-				address: isHex ? `0x${address}` : `${address}`,
-				instruction: instruction.instruction
-			};
-			// if instruction's source starts on a new line add the source to instruction
-			if (instruction.line !== undefined && lastLine !== instruction.line) {
-				lastLine = instruction.line;
-				instr.location = loc;
-				instr.line = this.convertDebuggerLineToClient(instruction.line);
-			}
-			return instr;
-		});
-
-		response.body = {
-			instructions: instructions
-		};
-		this.sendResponse(response);
-	}
 
 	protected setInstructionBreakpointsRequest(response: DebugProtocol.SetInstructionBreakpointsResponse, args: DebugProtocol.SetInstructionBreakpointsArguments) {
 

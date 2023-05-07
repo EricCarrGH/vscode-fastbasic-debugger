@@ -13,6 +13,7 @@ The goal of this project is to provide a first class debugging experience for Fa
 ## Running or Debugging
 
 With the "Run/Debug" split button in the editor header you can easily "run" or "debug" a FastBasic file without having to configure a debug configuration.
+
 * "Running" a file compiles and runs it in the emulator.
 * "Debugging" a file compiles debug information into the file before starting, then starts a debugging session.
   
