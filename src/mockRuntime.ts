@@ -228,11 +228,10 @@ export class MockRuntime extends EventEmitter {
 
 
 	/**
-	 * Continue execution to the end/beginning.
+	 * Continue execution to the next breakpoint or end of program
 	 */
-	public async continue(reverse: boolean) {
+	public async continue() {
 		let payload = new Uint8Array(1);
-
 		payload[0] = 4;// Continue
 
 		// Write payload
@@ -241,24 +240,30 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Step to the next/previous non empty line.
+	 * Step forward to the next line.
 	 */
-	public step(instruction: boolean, reverse: boolean) {
+	public async step(instruction: boolean, reverse: boolean) {
+		let payload = new Uint8Array(1);
+		payload[0] = 3;// Step forward
 
-		if (instruction) {
-			if (reverse) {
-				this.instruction--;
-			} else {
-				this.instruction++;
-			}
-			this.sendEvent('stopOnStep');
-		} else {
-			if (!this.executeLine(this.currentLine, reverse)) {
-				if (!this.updateCurrentLine(reverse)) {
-					this.findNextStatement(reverse, 'stopOnStep');
-				}
-			}
-		}
+		// Write payload
+		await this.sendPayloadToProgram(payload);
+		await this.waitOnProgram();
+
+		// if (instruction) {
+		// 	if (reverse) {
+		// 		this.instruction--;
+		// 	} else {
+		// 		this.instruction++;
+		// 	}
+		// 	this.sendEvent('stopOnStep');
+		// } else {
+		// 	if (!this.executeLine(this.currentLine, reverse)) {
+		// 		if (!this.updateCurrentLine(reverse)) {
+		// 			this.findNextStatement(reverse, 'stopOnStep');
+		// 		}
+		// 	}
+		// }
 	}
 
 	private updateCurrentLine(reverse: boolean): boolean {

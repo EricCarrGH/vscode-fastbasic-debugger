@@ -354,7 +354,11 @@ export class MockDebugSession extends LoggingDebugSession {
 			if (sourceLines[i] === "'___PROGRAM_END___") {
 				break;
 			}
-			sourceLines[i] = `@___DEBUG_CB ${i}:${sourceLines[i]}`;
+			let line = sourceLines[i].trim();
+			if (line.length>0 && !line.startsWith("'") && !line.startsWith(".")) {
+				sourceLines[i] = `@___DEBUG_CB ${i}:${sourceLines[i]}`;
+			}
+			
 		}
 		// Don't end program until key press in debug mode
 		sourceLines.splice(i,0,"@___DEBUG_END");
@@ -573,14 +577,9 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
-		this._runtime.continue(false);
+		this._runtime.continue();
 		this.sendResponse(response);
 	}
-
-	protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments): void {
-		this._runtime.continue(true);
-		this.sendResponse(response);
- 	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
 		this._runtime.step(args.granularity === 'instruction', false);
