@@ -209,8 +209,6 @@ export class MockRuntime extends EventEmitter {
 			}
 			fastBasicChannel.appendLine(stdout);
 		});
-
-
 		
 		// Wait for the program to initiate a breakpoint
 		await this.mainWaitLoop();
@@ -655,14 +653,16 @@ export class MockRuntime extends EventEmitter {
 		let requestMemoryDump = new Uint8Array(4*(this.variables.size+1));
 
 		//requestMemoryDump[0] = 2;// Dump memory
-		this.setAtariWord(requestMemoryDump, 1, this._varMinLoc);
-		this.setAtariWord(requestMemoryDump, 3, this._varMemSize);
-		let memDumpIndex = 5;
+		this.setAtariWord(requestMemoryDump, 0, this._varMinLoc);
+		this.setAtariWord(requestMemoryDump, 2, this._varMemSize);
+		let memDumpIndex = 4;
 		this.variables.forEach(v => {
-			if (v.memLoc && (v.type === VAR_STRING || Array.isArray(v.value)) ) {
-				this.setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
-				this.setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
-				memDumpIndex+=4;
+			if (v.memLoc) {
+				if(v.type === VAR_STRING || Array.isArray(v.value))  {
+					this.setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
+					this.setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
+					memDumpIndex+=4;
+				}
 			} else {
 				console.error(`Warning! memLoc not found for varible: ${v.name}`);
 			}
@@ -812,49 +812,58 @@ export class MockRuntime extends EventEmitter {
 		// Parse response and update vars
 		let debugFileResponse = await this.fileAccessor.readFile(this._debugFileFromProg);
 
-		let varIndex = 0;
-		let heapIndex = this._varMemSize;
+		let packetType = debugFileResponse[0];
 
-		// Parse incoming variable data and populate variables in debugger
-		this.variables.forEach(v => {
-			if (v.memLoc) {
-				let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
-				let arrayLen = v.byteLen / typeLen;
-				switch (v.type) {
-					case VAR_WORD:
-					case VAR_FLOAT:
-					case VAR_STRING:
-						if (arrayLen === 1) {
-							varIndex = v.memLoc-this._varMinLoc;
-							if (v.type === VAR_STRING) {
-								 varIndex = heapIndex;
-								 heapIndex+=typeLen;
+		switch (packetType) {
+			case 2:
+			let currentLine = this.getAtariValue(debugFileResponse, 1, VAR_WORD) ;
+			let varIndex = 0;
+			let startingLoc = this._varMinLoc - 3;
+			let heapIndex = this._varMemSize + 3;
+	
+			// Parse incoming variable data and populate variables in debugger
+			this.variables.forEach(v => {
+				if (v.memLoc) {
+					let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
+					let arrayLen = v.byteLen / typeLen;
+					switch (v.type) {
+						case VAR_WORD:
+						case VAR_FLOAT:
+						case VAR_STRING:
+							if (arrayLen === 1) {
+								varIndex = v.memLoc-startingLoc;
+								if (v.type === VAR_STRING) {
+									varIndex = heapIndex;
+									heapIndex+=typeLen;
+								}
+								v.value = this.getAtariValue(debugFileResponse, varIndex, v.type);
+	
+								break;
 							}
-							v.value = this.getAtariValue(debugFileResponse, varIndex, v.type);
-
+						case VAR_BYTE:
+							if (arrayLen === 0) {
+								console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
+								break;
+							} 
+							for(let i=0;i<arrayLen;i++) {
+								v.value[i].value = this.getAtariValue(debugFileResponse, heapIndex, v.type);
+								heapIndex += typeLen;
+							}
+							
 							break;
-						}
-					case VAR_BYTE:
-						if (arrayLen === 0) {
-							console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
-							break;
-						} 
-						for(let i=0;i<arrayLen;i++) {
-							v.value[i].value = this.getAtariValue(debugFileResponse, heapIndex, v.type);
-							heapIndex += typeLen;
-						}
-						
-						break;
-				}	
-				
-				
-				
-			} 
-		});
+					}	
+					
+					
+					
+				} 
+			});
 			// send 'stopped' event
-			this.currentLine = 7;
-			this.sendEvent('stopOnBreakpoint');
-			
+			if (typeof currentLine === "number") {
+				this.currentLine = currentLine;
+			}
+			this.sendEvent('stopOnBreakpoint');	
+			break;
+		}	
 	}
 
 	private async sendPayloadToProgram(payload: Uint8Array) {
