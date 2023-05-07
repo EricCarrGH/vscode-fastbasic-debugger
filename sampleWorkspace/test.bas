@@ -109,14 +109,13 @@ PROC ___DEBUG_POLL
     ? "[DEBUG MODE ";___DEBUG_MODE;"]"
     if ___DEBUG_MODE=0 or err()<>1 then exit
 
-    if ___DEBUG_MODE=1  ' Populate Breakpoint list received from debugger
+    if ___DEBUG_MODE=1  ' Populate Breakpoint list received from debugger, then continue execution
       get #5, ___DEBUG_BP(0)
       bget #5,&___DEBUG_BP+2,___DEBUG_BP(0)*2
       close #5
+       ___DEBUG_BREAK_NEXT=0
     elif ___DEBUG_MODE=3 ' Step forward to next line
       ___DEBUG_BREAK_NEXT=1
-    elif ___DEBUG_MODE=4 ' Continue
-      ___DEBUG_BREAK_NEXT=0
     endif
     close #5
     

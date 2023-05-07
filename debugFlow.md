@@ -23,7 +23,6 @@ Initialize the debugging session and establish breakpoints:
 4. Debugger retrieves list of breakpoints from vscode and writes "1:Breakpoint List" to program
 5. Debugger starts emulator to run compiled XEX
 6. Program processes "1:Breakpoint list",  and starts Standard Execution
-7. At end, program sends "9:Program ended", and debugger stops debugging.
 
 At this point, the debugger waits to hear back from the program to initiate a breakpoint.
 This is because "1:Breakpoint list" will remain unti the program deletes it to signal a response.
@@ -33,11 +32,6 @@ This is because "1:Breakpoint list" will remain unti the program deletes it to s
 2. Program sends "var dump"
 3. Debugger parses "var dump", updates variables.
 4. User can now inspect variables and intiates any of the following actions:
-
-### Update Breakpoints
-1. Debugger sends "1:Breakpoing list"
-2. Program processes "1:Breakpoint list"
-3. Debugger sends "ACK"
 
 ### Change Variable Value
 1. Debugger sends "2:Set var value"
@@ -50,6 +44,10 @@ This is because "1:Breakpoint list" will remain unti the program deletes it to s
 3. Program executes current line, resuming standard execution
 
 ### Resume Execution (until next breakpoint)
-1. Debugger sends "4:Resume"
-2. Program reads "4:Resume", clears "break on next line" flag
+1. Debugger sends "1:Breakpoint list" (in case user changed breakpoints)
+2. Program reads "1:Breakpoint list", clears "break on next line" flag
 3. Program executes current line, resume standard execution
+
+## End of program
+The debugger inserts a line to wait for keypress before stopping the program.
+On key press, the program sends "9:Program ended", and debugger stops debugging.

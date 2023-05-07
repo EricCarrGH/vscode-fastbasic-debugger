@@ -23,16 +23,6 @@ export interface IRuntimeBreakpoint {
 	verified: boolean;
 }
 
-
-
-
-interface RuntimeDisassembledInstruction {
-	address: number;
-	instruction: string;
-	line?: number;
-}
-
-
 interface IRuntimeStackFrame {
 	index: number;
 	name: string;
@@ -47,7 +37,6 @@ interface IRuntimeStack {
 	frames: IRuntimeStackFrame[];
 }
 
-
 export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
 
 export class RuntimeVariable {
@@ -60,8 +49,6 @@ export class RuntimeVariable {
 	public get value() {
 		return this._value;
 	}
-
-	
 
 	public set value(value: IRuntimeVariableType) {
 		this._value = value;
@@ -94,8 +81,6 @@ interface Word {
 	line: number;
 	index: number;
 }
-
-
 
 export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
@@ -145,10 +130,7 @@ export class MockRuntime extends EventEmitter {
 	
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
-	private instructions: Word[] = [];
-	private starts: number[] = [];
-	private ends: number[] = [];
-
+	
 	// This is the next line that will be 'executed'
 	private _currentLine = 0;
 	private get currentLine() {
@@ -156,7 +138,6 @@ export class MockRuntime extends EventEmitter {
 	}
 	private set currentLine(x) {
 		this._currentLine = x;
-		this.instruction = this.starts[x];
 	}
 	private currentColumn: number | undefined;
 
@@ -212,18 +193,6 @@ export class MockRuntime extends EventEmitter {
 		
 		// Wait for the program to initiate a breakpoint
 		await this.waitOnProgram();
-
-		/*if (debug) {
-		
-			if (stopOnEntry) {
-				this.findNextStatement(false, 'stopOnEntry');
-			} else {
-				// we just start to run until we hit a breakpoint, an exception, or the end of the program
-				this.continue(false);
-			}
-		} else {
-			this.continue(false);
-		}*/
 	}
 
 
@@ -231,11 +200,12 @@ export class MockRuntime extends EventEmitter {
 	 * Continue execution to the next breakpoint or end of program
 	 */
 	public async continue() {
-		let payload = new Uint8Array(1);
-		payload[0] = 4;// Continue
+		//let payload = new Uint8Array(1);
+		//payload[0] = 4;// Continue
 
 		// Write payload
-		await this.sendPayloadToProgram(payload);
+		//await this.sendPayloadToProgram(payload);
+		await this.sendBreakpoints();
 		await this.waitOnProgram();
 	}
 
@@ -266,14 +236,6 @@ export class MockRuntime extends EventEmitter {
 			frames: frames,
 			count: 1
 		};
-	}
-
-	/*
-	 * Determine possible column breakpoint positions for the given line.
-	 * Here we return the start location of words with more than 8 characters.
-	 */
-	public getBreakpoints(path: string, line: number): number[] {
-		return this.getWords(line, this.getLine(line)).filter(w => w.name.length > 8).map(w => w.index);
 	}
 
 	/*
@@ -354,46 +316,11 @@ export class MockRuntime extends EventEmitter {
 		return this.variables.get(name);
 	}
 
-	/**
-	 * Return words of the given address range as "instructions"
-	 */
-	public disassemble(address: number, instructionCount: number): RuntimeDisassembledInstruction[] {
-
-		const instructions: RuntimeDisassembledInstruction[] = [];
-
-		for (let a = address; a < address + instructionCount; a++) {
-			if (a >= 0 && a < this.instructions.length) {
-				instructions.push({
-					address: a,
-					instruction: this.instructions[a].name,
-					line: this.instructions[a].line
-				});
-			} else {
-				instructions.push({
-					address: a,
-					instruction: 'nop'
-				});
-			}
-		}
-
-		return instructions;
-	}
 
 	// private methods
 
 	private getLine(line?: number): string {
 		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
-	}
-
-	private getWords(l: number, line: string): Word[] {
-		// break line into words
-		const WORD_REGEXP = /[a-z]+/ig;
-		const words: Word[] = [];
-		let match: RegExpExecArray | null;
-		while (match = WORD_REGEXP.exec(line)) {
-			words.push({ name: match[0], line: l, index: match.index });
-		}
-		return words;
 	}
 
 	private async loadSource(file: string): Promise<void> {
@@ -577,138 +504,8 @@ export class MockRuntime extends EventEmitter {
 		// Write memory dump file
 		await this.fileAccessor.writeFile(this._debugMemFile, requestMemoryDump);
 
-		this.instructions = [];
-
-		this.starts = [];
-		this.instructions = [];
-		this.ends = [];
-/*
-		for (let l = 0; l < this.sourceLines.length; l++) {
-			this.starts.push(this.instructions.length);
-			const words = this.getWords(l, this.sourceLines[l]);
-			for (let word of words) {
-				this.instructions.push(word);
-			}
-			this.ends.push(this.instructions.length);
-		}
-		*/
 	}
 
-	/**
-	 * return true on stop
-	 */
-	 private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
-
-		for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this.sourceLines.length; reverse ? ln-- : ln++) {
-
-			// is there a source breakpoint?
-			const breakpoints = this.breakPoints.get(this._sourceFile);
-			if (breakpoints) {
-				const bps = breakpoints.filter(bp => bp.line === ln);
-				if (bps.length > 0) {
-
-					// send 'stopped' event
-					this.sendEvent('stopOnBreakpoint');
-
-					// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
-					// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
-					if (!bps[0].verified) {
-						bps[0].verified = true;
-						this.sendEvent('breakpointValidated', bps[0]);
-					}
-
-					this.currentLine = ln;
-					return true;
-				}
-			}
-
-			const line = this.getLine(ln);
-			if (line.length > 0) {
-				this.currentLine = ln;
-				break;
-			}
-		}
-		if (stepEvent) {
-			this.sendEvent(stepEvent);
-			return true;
-		}
-		return false;
-	}
-
-	/**
-	 * "execute a line" of the readme markdown.
-	 * Returns true if execution sent out a stopped event and needs to stop.
-	 */
-	private executeLine(ln: number, reverse: boolean): boolean {
-
-		// first "execute" the instructions associated with this line and potentially hit instruction breakpoints
-		while (reverse ? this.instruction >= this.starts[ln] : this.instruction < this.ends[ln]) {
-			reverse ? this.instruction-- : this.instruction++;
-			if (this.instructionBreakpoints.has(this.instruction)) {
-				this.sendEvent('stopOnInstructionBreakpoint');
-				return true;
-			}
-		}
-
-		const line = this.getLine(ln);
-
-		// find variable accesses
-		let reg0 = /\$([a-z][a-z0-9]*)(=(false|true|[0-9]+(\.[0-9]+)?|\".*\"|\{.*\}))?/ig;
-		let matches0: RegExpExecArray | null;
-		while (matches0 = reg0.exec(line)) {
-			if (matches0.length === 5) {
-
-				// let access: string | undefined;
-
-				// const name = matches0[1];
-				// const value = matches0[3];
-/*
-				let v = new RuntimeVariable(name, value);
-
-				const accessType = this.breakAddresses.get(name);
-				if (access && accessType && accessType.indexOf(access) >= 0) {
-					this.sendEvent('stopOnDataBreakpoint', access);
-					return true;
-				}
-				*/
-			}
-		}
-
-		// if 'log(...)' found in source -> send argument to debug console
-		const reg1 = /(log|prio|out|err)\(([^\)]*)\)/g;
-		let matches1: RegExpExecArray | null;
-		while (matches1 = reg1.exec(line)) {
-			if (matches1.length === 3) {
-				this.sendEvent('output', matches1[1], matches1[2], this._sourceFile, ln, matches1.index);
-			}
-		}
-
-		// if pattern 'exception(...)' found in source -> throw named exception
-		const matches2 = /exception\((.*)\)/.exec(line);
-		if (matches2 && matches2.length === 2) {
-			const exception = matches2[1].trim();
-			if (this.namedException === exception) {
-				this.sendEvent('stopOnException', exception);
-				return true;
-			} else {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
-			}
-		} else {
-			// if word 'exception' found in source -> throw exception
-			if (line.indexOf('exception') >= 0) {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
-			}
-		}
-
-		// nothing interesting found -> continue
-		return false;
-	}
 
 	private async waitOnProgram(): Promise<void> {
 
