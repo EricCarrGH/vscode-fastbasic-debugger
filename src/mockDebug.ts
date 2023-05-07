@@ -67,7 +67,7 @@ import {
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	InvalidatedEvent,
-	Scope, Source, Handles, Breakpoint, MemoryEvent
+	Scope, Source, Handles, Breakpoint, MemoryEvent, Thread, StackFrame
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
@@ -495,19 +495,50 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 
-	// protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
+	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
 
-	// 	// runtime supports no threads so just return a default thread.
-	// 	response.body = {
-	// 		threads: [
-	// 			new Thread(MockDebugSession.threadID, "thread 1"),
-	// 			new Thread(MockDebugSession.threadID + 1, "thread 2"),
-	// 		]
-	// 	};
-	// 	this.sendResponse(response);
-	// }
+		// runtime supports no threads so just return a default thread.
+		response.body = {
+			threads: [
+				new Thread(MockDebugSession.threadID, "Main")
+			]
+		};
+		this.sendResponse(response);
+	}
 
 
+	
+	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
+
+		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
+		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+		const endFrame = startFrame + maxLevels;
+
+		const stk = this._runtime.stack(startFrame, endFrame);
+
+		response.body = {
+			stackFrames: stk.frames.map((f, ix) => {
+				const sf: DebugProtocol.StackFrame = new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line));
+				if (typeof f.column === 'number') {
+					sf.column = this.convertDebuggerColumnToClient(f.column);
+				}
+				if (typeof f.instruction === 'number') {
+					const address = "1234";//this.formatAddress(f.instruction);
+					sf.name = `${f.name} ${address}`;
+					sf.instructionPointerReference = address;
+				}
+
+				return sf;
+			}),
+			// 4 options for 'totalFrames':
+			//omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
+			totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
+			//totalFrames: 1000000 			// not the correct size, should result in a max. of two requests
+			//totalFrames: endFrame + 20 	// dynamically increases the size with every requested chunk, results in paging
+		};
+		this.sendResponse(response);
+	}
+	
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
 
 		response.body = {

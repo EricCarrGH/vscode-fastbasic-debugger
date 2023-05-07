@@ -32,6 +32,22 @@ interface RuntimeDisassembledInstruction {
 	line?: number;
 }
 
+
+interface IRuntimeStackFrame {
+	index: number;
+	name: string;
+	file: string;
+	line: number;
+	column?: number;
+	instruction?: number;
+}
+
+interface IRuntimeStack {
+	count: number;
+	frames: IRuntimeStackFrame[];
+}
+
+
 export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
 
 export class RuntimeVariable {
@@ -44,6 +60,8 @@ export class RuntimeVariable {
 	public get value() {
 		return this._value;
 	}
+
+	
 
 	public set value(value: IRuntimeVariableType) {
 		this._value = value;
@@ -179,6 +197,11 @@ export class MockRuntime extends EventEmitter {
 			await this.sendBreakpoints();
 		}
 
+			// send 'stopped' event
+		//	this.findNextStatement(false, 'stopOnEntry');
+			//return;
+			//this.sendEvent('stopOnBreakpoint');
+
 		// Run the program in the emulator
 		cp.execFile(`${emulatorPath}`,["/singleinstance","/run", executable ], (err, stdout) => {
 			if (err) {
@@ -187,6 +210,8 @@ export class MockRuntime extends EventEmitter {
 			fastBasicChannel.appendLine(stdout);
 		});
 
+
+		
 		// Wait for the program to initiate a breakpoint
 		await this.mainWaitLoop();
 
@@ -302,6 +327,43 @@ export class MockRuntime extends EventEmitter {
 		this.sendEvent('stopOnStep');
 	}
 
+	
+	/**
+	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
+	 */
+	public stack(startFrame: number, endFrame: number): IRuntimeStack {
+
+		const line = this.getLine();
+		const words = this.getWords(this.currentLine, line);
+		words.push({ name: 'BOTTOM', line: -1, index: -1 });	// add a sentinel so that the stack is never empty...
+
+		// if the line contains the word 'disassembly' we support to "disassemble" the line by adding an 'instruction' property to the stackframe
+		const instruction = line.indexOf('disassembly') >= 0 ? this.instruction : undefined;
+
+		const column = typeof this.currentColumn === 'number' ? this.currentColumn : undefined;
+
+		const frames: IRuntimeStackFrame[] = [];
+		// every word of the current line becomes a stack frame.
+		for (let i = startFrame; i < Math.min(endFrame, words.length); i++) {
+
+			const stackFrame: IRuntimeStackFrame = {
+				index: i,
+				name: `${words[i].name}(${i})`,	// use a word of the line as the stackframe name
+				file: this._sourceFile,
+				line: this.currentLine,
+				column: column, // words[i].index
+				instruction: instruction
+			};
+
+			frames.push(stackFrame);
+		}
+
+		return {
+			frames: frames,
+			count: words.length
+		};
+	}
+
 	/*
 	 * Determine possible column breakpoint positions for the given line.
 	 * Here we return the start location of words with more than 8 characters.
@@ -323,6 +385,7 @@ export class MockRuntime extends EventEmitter {
 			this.breakPoints.set(path, bps);
 		}
 		bps.push(bp);
+		this.sendEvent('breakpointValidated', bp);
 		return bp;
 	}
 
@@ -789,7 +852,9 @@ export class MockRuntime extends EventEmitter {
 			} 
 		});
 			// send 'stopped' event
+			this.currentLine = 7;
 			this.sendEvent('stopOnBreakpoint');
+			
 	}
 
 	private async sendPayloadToProgram(payload: Uint8Array) {
