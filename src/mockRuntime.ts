@@ -4,6 +4,8 @@
 
 import { EventEmitter } from 'events';
 import { syncBuiltinESMExports } from 'module';
+import { fastBasicChannel } from './activateMockDebug';
+import * as cp from 'child_process';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -49,7 +51,7 @@ export class RuntimeVariable {
 
 	public reference?: number;
 
-	public memLoc: number =0;
+	public memLoc: number = 0;
 
 	public get value() {
 		return this._value;
@@ -128,7 +130,10 @@ export class MockRuntime extends EventEmitter {
 
 	private _debugFileToEmu: string = '';
 	private _debugFileFromEmu: string = '';
-	private _requestMemoryDumpPayload : Uint8Array = new Uint8Array();
+	private _debugMemFile: string='';
+
+	private _varMemSize: number = 0; // Size
+	private _varMinLoc: number = 0;
 
 	private variables = new Map<string, RuntimeVariable>();
 	
@@ -174,9 +179,20 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
+	public async start(program: string, stopOnEntry: boolean, debug: boolean, emulatorPath: string, executable: string): Promise<void> {
 
-		await this.loadSource(this.normalizePathAndCasing(program));
+		// Load and parse the symbols if debugging
+		if (debug) {
+			await this.loadSource(this.normalizePathAndCasing(program));
+		}
+
+		// Run the executable in theemulator
+		cp.execFile(`${emulatorPath}`,["/singleinstance","/run", executable ], (err, stdout) => {
+			if (err) {
+				fastBasicChannel.appendLine(err.message);//.substring(err.message.indexOf("\n")));
+			}
+			fastBasicChannel.appendLine(stdout);
+		});
 
 		if (debug) {
 			await this.verifyBreakpoints(this._sourceFile);
@@ -470,6 +486,7 @@ export class MockRuntime extends EventEmitter {
 			symbolFileParts[symbolFileParts.length-1] ="bin/debug.";
 			this._debugFileToEmu= symbolFileParts.join("/") + "in";
 			this._debugFileFromEmu = symbolFileParts.join("/") + "out";
+			this._debugMemFile = symbolFileParts.join("/") + "mem";
 
 			await this.initializeContents(
 				await this.fileAccessor.readFile(file),
@@ -588,8 +605,8 @@ export class MockRuntime extends EventEmitter {
 		al 002304 .fb_var_HW
 		al 002306 .fb_var____DEBUG_KEY
 		*/
-		var minLoc = 65536;
-		let memSize = 0;
+		this._varMinLoc = 65536;
+		this._varMemSize = 0;
 		for (let i = 0; i < refsLines.length; i++) {
 			let parts = refsLines[i].split('.');
 			if (parts.length>1 && parts[1].startsWith("fb_var_")) {
@@ -597,103 +614,41 @@ export class MockRuntime extends EventEmitter {
 				let v = this.variables.get(name) || this.variables.get(name + "$") || this.variables.get(name + "%");
 				if (v) {
 					let memLoc = parseInt(parts[0].substring(5).trim(), 16);
-					if (memLoc<minLoc) {
-						minLoc = memLoc;
+					if (memLoc < this._varMinLoc) {
+						this._varMinLoc = memLoc;
 					}
 					v.memLoc = memLoc;
-					memSize += VAR_TYPE_LEN.get(v.type) || 0;
+					this._varMemSize += VAR_TYPE_LEN.get(v.type) || 0;
 				}	
 			}		
 		}
 		
-		function setAtariWord(array:Uint8Array, index: number, value: number) {
-			array[index] = value % 256;
-			array[index+1] = value/256;
-		}
-
-		function getAtariValue(array:Uint8Array, index: number, type: string)  {
-			switch (type) {
-				case VAR_WORD : return array[index] + array[index+1]*256;
-				case VAR_BYTE : return array[index];
-				case VAR_FLOAT: return 12.34; // TODO - parsee Atari 6-byte BCD
-				case VAR_STRING: return new TextDecoder().decode(array.slice(index+1,index+array[index]+1));
-				default: return 0;
-			}
-		}
-
 		// Construct memory dump payload request
 		let requestMemoryDump = new Uint8Array(1+4*(this.variables.size+1));
 
 		requestMemoryDump[0] = 2;// Dump memory
-		setAtariWord(requestMemoryDump, 1, minLoc);
-		setAtariWord(requestMemoryDump, 3, memSize);
+		this.setAtariWord(requestMemoryDump, 1, this._varMinLoc);
+		this.setAtariWord(requestMemoryDump, 3, this._varMemSize);
 		let memDumpIndex = 5;
 		this.variables.forEach(v => {
 			if (v.memLoc && (v.type === VAR_STRING || Array.isArray(v.value)) ) {
-				setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
-				setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
+				this.setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
+				this.setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
 				memDumpIndex+=4;
 			} else {
 				console.error(`Warning! memLoc not found for varible: ${v.name}`);
 			}
 		});
-
-		this._requestMemoryDumpPayload = requestMemoryDump;
-		// Write memory dump request
-		await this.fileAccessor.writeFile(this._debugFileToEmu, this._requestMemoryDumpPayload);
-
-		// Wait for response
-		await this.fileAccessor.waitUntilFileDoesNotExist(this._debugFileToEmu);
-
-		// Parse response and update vars
-		let debugFileResponse = await this.fileAccessor.readFile(this._debugFileFromEmu);
-
-		let varIndex = 0;
-		let heapIndex = memSize;
-
-		// Parse incoming variable data and populate variables in debugger
-		this.variables.forEach(v => {
-			if (v.memLoc) {
-				let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
-				let arrayLen = v.byteLen / typeLen;
-				switch (v.type) {
-					case VAR_WORD:
-					case VAR_FLOAT:
-					case VAR_STRING:
-						if (arrayLen === 1) {
-							varIndex = v.memLoc-minLoc;
-							if (v.type === VAR_STRING) {
-								 varIndex = heapIndex;
-								 heapIndex+=typeLen;
-							}
-							v.value = getAtariValue(debugFileResponse, varIndex, v.type);
-
-							break;
-						}
-					case VAR_BYTE:
-						if (arrayLen === 0) {
-							console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
-							break;
-						} 
-						for(let i=0;i<arrayLen;i++) {
-							v.value[i].value = getAtariValue(debugFileResponse, heapIndex, v.type);
-							heapIndex += typeLen;
-						}
-						
-						break;
-				}	
-				
-				
-				
-			} 
-		});
+		
+		// Write memory dump file
+		await this.fileAccessor.writeFile(this._debugMemFile, requestMemoryDump);
 
 		this.instructions = [];
 
 		this.starts = [];
 		this.instructions = [];
 		this.ends = [];
-
+/*
 		for (let l = 0; l < this.sourceLines.length; l++) {
 			this.starts.push(this.instructions.length);
 			const words = this.getWords(l, this.sourceLines[l]);
@@ -702,6 +657,7 @@ export class MockRuntime extends EventEmitter {
 			}
 			this.ends.push(this.instructions.length);
 		}
+		*/
 	}
 
 	/**
@@ -820,7 +776,56 @@ export class MockRuntime extends EventEmitter {
 		return false;
 	}
 
+	private async readProgramResponse(): Promise<void> {
+
+	}
 	private async verifyBreakpoints(path: string): Promise<void> {
+		
+		// Wait for response
+		await this.fileAccessor.waitUntilFileDoesNotExist(this._debugFileToEmu);
+
+		// Parse response and update vars
+		let debugFileResponse = await this.fileAccessor.readFile(this._debugFileFromEmu);
+
+		let varIndex = 0;
+		let heapIndex = this._varMemSize;
+
+		// Parse incoming variable data and populate variables in debugger
+		this.variables.forEach(v => {
+			if (v.memLoc) {
+				let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
+				let arrayLen = v.byteLen / typeLen;
+				switch (v.type) {
+					case VAR_WORD:
+					case VAR_FLOAT:
+					case VAR_STRING:
+						if (arrayLen === 1) {
+							varIndex = v.memLoc-this._varMinLoc;
+							if (v.type === VAR_STRING) {
+								 varIndex = heapIndex;
+								 heapIndex+=typeLen;
+							}
+							v.value = this.getAtariValue(debugFileResponse, varIndex, v.type);
+
+							break;
+						}
+					case VAR_BYTE:
+						if (arrayLen === 0) {
+							console.error(`Warning! array length of 0 found for var:${v.name}, type:${v.type}, byteLen:${v.byteLen}, typeLen:${typeLen}`);
+							break;
+						} 
+						for(let i=0;i<arrayLen;i++) {
+							v.value[i].value = this.getAtariValue(debugFileResponse, heapIndex, v.type);
+							heapIndex += typeLen;
+						}
+						
+						break;
+				}	
+				
+				
+				
+			} 
+		});
 
 		const bps = this.breakPoints.get(path);
 		if (bps) {
@@ -859,6 +864,22 @@ export class MockRuntime extends EventEmitter {
 			return path.replace(/\//g, '\\').toLowerCase();
 		} else {
 			return path.replace(/\\/g, '/');
+		}
+	}
+
+	
+	private setAtariWord(array:Uint8Array, index: number, value: number) {
+		array[index] = value % 256;
+		array[index+1] = value/256;
+	}
+
+	private getAtariValue(array:Uint8Array, index: number, type: string)  {
+		switch (type) {
+			case VAR_WORD : return array[index] + array[index+1]*256;
+			case VAR_BYTE : return array[index];
+			case VAR_FLOAT: return 12.34; // TODO - parsee Atari 6-byte BCD
+			case VAR_STRING: return new TextDecoder().decode(array.slice(index+1,index+array[index]+1));
+			default: return 0;
 		}
 	}
 }
