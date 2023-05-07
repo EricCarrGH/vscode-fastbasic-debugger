@@ -52,7 +52,7 @@ PROC ___DEBUG_BP ___DEBUG_LINE
       get #5,___DEBUG_MODE
       ? "[DEBUG MODE ";___DEBUG_MODE;"]"
       if ___DEBUG_MODE=0 or err()<>1 then exit
-
+  
       if ___DEBUG_MODE=2  ' Dump memory to debugger. Multiples of (word loc, byte len)
       
         close #4:open #4,8,0,"H4:debug.out"

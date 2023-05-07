@@ -3,7 +3,6 @@
  *--------------------------------------------------------*/
 
 import { EventEmitter } from 'events';
-import { syncBuiltinESMExports } from 'module';
 import { fastBasicChannel } from './activateMockDebug';
 import * as cp from 'child_process';
 
@@ -11,9 +10,10 @@ export interface FileAccessor {
 	isWindows: boolean;
 	readFile(path: string): Promise<Uint8Array>;
 	writeFile(path: string, contents: Uint8Array): Promise<void>;
-	waitUntilFileDoesNotExist(path: string, timeoutMs?: number);
-	waitUntilFileExists(path: string, timeoutMs?: number)
-	doesFileExist(path: string);
+	waitUntilFileDoesNotExist(path: string, timeoutMs?: number) :Promise<boolean>;
+	waitUntilFileExists(path: string, timeoutMs?: number) :Promise<boolean>
+	doesFileExist(path: string) :Promise<boolean>;
+	deleteFile(path: string) : Promise<void>;
 	
 }
 
@@ -128,8 +128,8 @@ export class MockRuntime extends EventEmitter {
 		return this._sourceFile;
 	}
 
-	private _debugFileToEmu: string = '';
-	private _debugFileFromEmu: string = '';
+	private _debugFileToProg: string = '';
+	private _debugFileFromProg: string = '';
 	private _debugMemFile: string='';
 
 	private _varMemSize: number = 0; // Size
@@ -180,10 +180,15 @@ export class MockRuntime extends EventEmitter {
 	 * Start executing the given program.
 	 */
 	public async start(program: string, stopOnEntry: boolean, debug: boolean, emulatorPath: string, executable: string): Promise<void> {
+ 
+		fastBasicChannel.appendLine(`Compiled successfully - running in emulator..`);
 
 		// Load and parse the symbols if debugging
 		if (debug) {
-			await this.loadSource(this.normalizePathAndCasing(program));
+			// Load the source, which creates the memory dump file
+			await this.loadSource(program);
+			// Create a send breakpoints file to start communication with the program
+			await this.sendBreakpoints();
 		}
 
 		// Run the executable in theemulator
@@ -194,9 +199,10 @@ export class MockRuntime extends EventEmitter {
 			fastBasicChannel.appendLine(stdout);
 		});
 
-		if (debug) {
-			await this.verifyBreakpoints(this._sourceFile);
+		this.continue(false);
 
+		/*if (debug) {
+		
 			if (stopOnEntry) {
 				this.findNextStatement(false, 'stopOnEntry');
 			} else {
@@ -205,7 +211,7 @@ export class MockRuntime extends EventEmitter {
 			}
 		} else {
 			this.continue(false);
-		}
+		}*/
 	}
 
 	/**
@@ -350,16 +356,13 @@ export class MockRuntime extends EventEmitter {
 	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint> {
 		path = this.normalizePathAndCasing(path);
 
-		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
+		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		let bps = this.breakPoints.get(path);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
 			this.breakPoints.set(path, bps);
 		}
 		bps.push(bp);
-
-		await this.verifyBreakpoints(path);
-
 		return bp;
 	}
 
@@ -467,32 +470,34 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	private async loadSource(file: string): Promise<void> {
-
+		file = this.normalizePathAndCasing(file);
 		if (this._sourceFile !== file) {
+			this._sourceFile = file;
+			
 			let ext  = file.split(".").splice(-1)[0].toLowerCase();
 			if (ext !== "bas" && ext !== "lst") {
 				return;
 			}
 
-	
-			this._sourceFile = file;
-
 			//file = file.replace("readme.md", "test.bas");
 
-			let symbolFileParts = file.split("/");
+			let isWindows = 'win32' === process.platform;
+			var folderDelimiter = isWindows ? "\\" : "/";
+
+			let symbolFileParts = file.split(folderDelimiter);
 			symbolFileParts[symbolFileParts.length-1] ="bin/" + symbolFileParts[symbolFileParts.length-1].split(".",1)[0];
-			let symbolFile = symbolFileParts.join("/");
+			let symbolFile = symbolFileParts.join(folderDelimiter);
 
 			symbolFileParts[symbolFileParts.length-1] ="bin/debug.";
-			this._debugFileToEmu= symbolFileParts.join("/") + "in";
-			this._debugFileFromEmu = symbolFileParts.join("/") + "out";
-			this._debugMemFile = symbolFileParts.join("/") + "mem";
+			this._debugFileToProg= symbolFileParts.join(folderDelimiter) + "in";
+			this._debugFileFromProg = symbolFileParts.join(folderDelimiter) + "out";
+			this._debugMemFile = symbolFileParts.join(folderDelimiter) + "mem";
 
 			await this.initializeContents(
 				await this.fileAccessor.readFile(file),
 				await this.fileAccessor.readFile(symbolFile+".lst"),
 				await this.fileAccessor.readFile(symbolFile+".lbl")
-				);
+			);
 		}
 	}
 
@@ -724,10 +729,10 @@ export class MockRuntime extends EventEmitter {
 		while (matches0 = reg0.exec(line)) {
 			if (matches0.length === 5) {
 
-				let access: string | undefined;
+				// let access: string | undefined;
 
-				const name = matches0[1];
-				const value = matches0[3];
+				// const name = matches0[1];
+				// const value = matches0[3];
 /*
 				let v = new RuntimeVariable(name, value);
 
@@ -778,14 +783,11 @@ export class MockRuntime extends EventEmitter {
 
 	private async readProgramResponse(): Promise<void> {
 
-	}
-	private async verifyBreakpoints(path: string): Promise<void> {
-		
 		// Wait for response
-		await this.fileAccessor.waitUntilFileDoesNotExist(this._debugFileToEmu);
+		await this.fileAccessor.waitUntilFileDoesNotExist(this._debugFileToProg);
 
 		// Parse response and update vars
-		let debugFileResponse = await this.fileAccessor.readFile(this._debugFileFromEmu);
+		let debugFileResponse = await this.fileAccessor.readFile(this._debugFileFromProg);
 
 		let varIndex = 0;
 		let heapIndex = this._varMemSize;
@@ -826,31 +828,28 @@ export class MockRuntime extends EventEmitter {
 				
 			} 
 		});
+	}
 
-		const bps = this.breakPoints.get(path);
-		if (bps) {
-			await this.loadSource(path);
-			bps.forEach(bp => {
-				if (!bp.verified && bp.line < this.sourceLines.length) {
-					const srcLine = this.getLine(bp.line);
+	private async sendPayloadToProgram(payload: Uint8Array) {
+		// Send payload to program
+		await this.fileAccessor.writeFile(this._debugFileToProg, payload);
 
-					// if a line is empty or starts with '+' we don't allow to set a breakpoint but move the breakpoint down
-					if (srcLine.length === 0 || srcLine.indexOf('+') === 0) {
-						bp.line++;
-					}
-					// if a line starts with '-' we don't allow to set a breakpoint but move the breakpoint up
-					if (srcLine.indexOf('-') === 0) {
-						bp.line--;
-					}
-					// don't set 'verified' to true if the line contains the word 'lazy'
-					// in this case the breakpoint will be verified 'lazy' after hitting it once.
-					if (srcLine.indexOf('lazy') < 0) {
-						bp.verified = true;
-						this.sendEvent('breakpointValidated', bp);
-					}
-				}
-			});
+		// Delete program's payload to us to trigger our payload is ready
+		await this.fileAccessor.deleteFile(this._debugFileFromProg);
+	}
+
+	private async sendBreakpoints(): Promise<void> {
+		const bps = this.breakPoints.get(this._sourceFile) ?? new Array<IRuntimeBreakpoint>();
+		
+		let payload = new Uint8Array(1+2*bps.length);
+
+		payload[0] = 1;// Dump memory
+		for (let i=0;i<bps.length;i++) {
+			this.setAtariWord(payload,1+i*2, bps[i].line);
 		}
+
+		// Write payload
+		await this.sendPayloadToProgram(payload);
 	}
 
 	private sendEvent(event: string, ... args: any[]): void {
@@ -860,7 +859,7 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	private normalizePathAndCasing(path: string) {
-		if (this.fileAccessor.isWindows) {
+		if ('win32' === process.platform) {
 			return path.replace(/\//g, '\\').toLowerCase();
 		} else {
 			return path.replace(/\\/g, '/');

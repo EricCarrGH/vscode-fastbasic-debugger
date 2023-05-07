@@ -64,22 +64,19 @@
  */
 
 import {
-	Logger, logger,
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
-	ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent, InvalidatedEvent,
+	InvalidatedEvent,
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint, MemoryEvent
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType } from './mockRuntime';
+import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, IRuntimeVariableType } from './mockRuntime';
 import { Subject } from 'await-notify';
 import * as base64 from 'base64-js';
 import { fastBasicChannel } from './activateMockDebug';
-import { tasks } from 'vscode';
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
-import { appendFile } from 'fs';
 
 
 /**
@@ -120,10 +117,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _cancellationTokens = new Map<number, boolean>();
 
-	private _reportProgress = false;
-	private _progressId = 10000;
-	private _cancelledProgressId: string | undefined = undefined;
-	private _isProgressCancellable = true;
 
 	private _valuesInHex = false;
 	private _useInvalidatedEvent = false;
@@ -139,7 +132,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._fileAccessor = fileAccessor;
 
 		// this debugger uses zero-based lines and columns
-		this.setDebuggerLinesStartAt1(false);
+		this.setDebuggerLinesStartAt1(true);
 		this.setDebuggerColumnsStartAt1(false);
 
 		this._runtime = new MockRuntime(fileAccessor);
@@ -203,7 +196,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
 
 		if (args.supportsProgressReporting) {
-			this._reportProgress = true;
 		}
 		if (args.supportsInvalidatedEvent) {
 			this._useInvalidatedEvent = true;
@@ -219,7 +211,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsEvaluateForHovers = true;
 
 		// make VS Code show a 'step back' button
-		response.body.supportsStepBack = true;
+		response.body.supportsStepBack = false;
 
 		// make VS Code support data breakpoints
 		response.body.supportsDataBreakpoints = true;
@@ -343,7 +335,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder+folderDelimiter+filename));
     
 		// Check if the compiler exists
-		if (!this._fileAccessor.doesFileExist(args.compilerPath)) {
+		if (!await this._fileAccessor.doesFileExist(args.compilerPath)) {
 			response.success = false;
 			response.message = "Could not find FastBasic compiler. Check the compilerPath in launch.json.";
 			this.sendResponse(response);
@@ -354,34 +346,43 @@ export class MockDebugSession extends LoggingDebugSession {
 		fastBasicChannel.clear();
 		fastBasicChannel.show(true);
 		fastBasicChannel.appendLine(`Compiling ${filename} using FastBasic Compiler..`);
-
+		let wroteError = false;
 		cp.execFile(`${args.compilerPath}`,[ filename ], { cwd:binFolder+folderDelimiter}, (err, stdout) => {
 			if (err) {
-				fastBasicChannel.appendLine(err.message.substring(err.message.indexOf("\n")));
+
+				// Strip the first two lines as they do not add value, unless they are unexpected
+				let error = err.message.split("\n");
+				if (error[0].startsWith("Command failed:")) {
+					error = error.slice(1);
+				}
+				if (error[0].startsWith("BAS compile '")) {
+					error = error.slice(1);
+				}
+				let errorMessage = error.join("\n");
+
+				wroteError = errorMessage.length>0;
+				fastBasicChannel.appendLine("\n" + errorMessage);
 			}
 			fastBasicChannel.appendLine(stdout);
 		});
-			
 
-		//var output = await execShell(`${args.compilerPath}`);// \"${binFolder+folderDelimiter+filename}\"`);
-		//fastBasicChannel.appendLine(output);
-	
+		// Wait until the XEX file is created
 		let atariExecutable = binFolder+folderDelimiter+filenameNoExt+"xex";
-		if (!this._fileAccessor.doesFileExist(atariExecutable)) {
+		if (!wroteError) {
+			await this._fileAccessor.waitUntilFileExists(atariExecutable, 10000);
+		}
+
+		if (! await this._fileAccessor.doesFileExist(atariExecutable)) {
 			response.success = false;
+			if (!wroteError) {
+				fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
+			}
 			this.sendErrorResponse(response, { 
 				id: 1001,
-				format: `Unable to compile source file.`,//, 
+				format: `Unable to compile source file.`,
 				showUser: false});
 			return undefined;	// abort launch
 		}
-		
-		//let options: any = isWindows ? { shell: true, StdioOptions:"pipe" } : undefined;
-		//let output = cp.execFileSync(args.compilerPath,[ "\"" + file + "\""]);
-
-		
-		//fastBasicChannel.appendLine( `${new Date().toLocaleTimeString()} - Unable to compile program!`);
-		
 
 		if (!this._fileAccessor.doesFileExist(args.emulatorPath)) {
 			response.success = false;
@@ -389,8 +390,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			this.sendResponse(response);
 			return undefined;
 		}
-
-		fastBasicChannel.appendLine(`Compilation succes! Launching emulator..`);
 
 		// start the program in the runtime
 		await this._runtime.start(file, !!args.stopOnEntry, !args.noDebug, args.emulatorPath, atariExecutable);
@@ -673,36 +672,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 	}
 
-	private async progressSequence() {
-
-		const ID = '' + this._progressId++;
-
-		await timeout(100);
-
-		const title = this._isProgressCancellable ? 'Cancellable operation' : 'Long running operation';
-		const startEvent: DebugProtocol.ProgressStartEvent = new ProgressStartEvent(ID, title);
-		startEvent.body.cancellable = this._isProgressCancellable;
-		this._isProgressCancellable = !this._isProgressCancellable;
-		this.sendEvent(startEvent);
-		this.sendEvent(new OutputEvent(`start progress: ${ID}\n`));
-
-		let endMessage = 'progress ended';
-
-		for (let i = 0; i < 100; i++) {
-			await timeout(500);
-			this.sendEvent(new ProgressUpdateEvent(ID, `progress: ${i}`));
-			if (this._cancelledProgressId === ID) {
-				endMessage = 'progress cancelled';
-				this._cancelledProgressId = undefined;
-				this.sendEvent(new OutputEvent(`cancel progress: ${ID}\n`));
-				break;
-			}
-		}
-		this.sendEvent(new ProgressEndEvent(ID, endMessage));
-		this.sendEvent(new OutputEvent(`end progress: ${ID}\n`));
-
-		this._cancelledProgressId = undefined;
-	}
+	
 
 	protected dataBreakpointInfoRequest(response: DebugProtocol.DataBreakpointInfoResponse, args: DebugProtocol.DataBreakpointInfoArguments): void {
 
@@ -714,7 +684,7 @@ export class MockDebugSession extends LoggingDebugSession {
         };
 
 		if (args.variablesReference && args.name) {
-			const v = this._variableHandles.get(args.variablesReference);
+			//const v = this._variableHandles.get(args.variablesReference);
 			response.body.dataId = args.name;
 			response.body.description = args.name;
 			response.body.accessTypes = ["read", "write", "readWrite"];
@@ -782,7 +752,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			this._cancellationTokens.set(args.requestId, true);
 		}
 		if (args.progressId) {
-			this._cancelledProgressId= args.progressId;
 		}
 	}
 
