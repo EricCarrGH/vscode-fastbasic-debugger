@@ -30,7 +30,6 @@ const DEBUGGER_STUB = `
 DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_BREAK_NEXT
 DIM ___DEBUG_BP(128)
 PROC ___DEBUG_CB ___DEBUG_LINE
-  IF NOT ___DEBUG_BP(0) THEN EXIT
   IF NOT ___DEBUG_BREAK_NEXT
     FOR ___DEBUG_I = 1 TO ___DEBUG_BP(0)
       IF ___DEBUG_LINE = ___DEBUG_BP(___DEBUG_I) THEN EXIT
@@ -134,11 +133,11 @@ PROC ___DEBUG_POLL
 ENDPROC
 
 PROC  ___DEBUG_END
- get ___DEBUG_I
  close #4:open #4,8,0,"H4:debug.out"
  put #4, 9 ' End
  close #4
  XIO #5, 33, 0, 0, "H4:debug.in"
+ get ___DEBUG_I
 ENDPROC
 `;
 /**
@@ -396,7 +395,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder+folderDelimiter+filename));
     
 		// Inject debugger code into the bin source file copy
-		await this.injectDebuggerCode(binFolder+folderDelimiter+filename);
+		let lineCount = await this.injectDebuggerCode(binFolder+folderDelimiter+filename);
 
 		// Check if the compiler exists
 		if (!await this._fileAccessor.doesFileExist(args.compilerPath)) {
@@ -425,11 +424,17 @@ export class MockDebugSession extends LoggingDebugSession {
 				
 				// Remove debugging code from error output
 				let errorMessage = error.join("\n");
-				errorMessage = errorMessage.replace(/:(\d+):(\d+):/gi, (s,row,col) => {
-					return `:${row}:${col-15}: `;
+				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+):(\d+):/gi, (s,ext,row,col) => {
+					return `.${ext}:${row}:${col-(row>1? 15:30)}: `;
 				} );
-				errorMessage = errorMessage.replace(/@___DEBUG_CB \d+:/gi,"");
 
+				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+): /gi, (s,ext,row) => {
+					return `.${ext}:${Math.min(row, lineCount)}: `;
+				} );
+
+				errorMessage = errorMessage.replace(/@___DEBUG_CB \d+:/gi,"");
+				errorMessage = errorMessage.replace("@___DEBUG_POLL:","");
+				
 				wroteError = errorMessage.length>0;
 				fastBasicChannel.appendLine("\n" + errorMessage);
 			}
@@ -467,9 +472,10 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	private async injectDebuggerCode(file: string) {
+	private async injectDebuggerCode(file: string) : Promise<number> {
 		let sourceLines = new TextDecoder().decode(await this._fileAccessor.readFile(file)).split(/\r?\n/);
-		sourceLines.unshift("@___DEBUG_POLL");
+		let lineCount = sourceLines.length;
+		sourceLines[0] = "@___DEBUG_POLL:@___DEBUG_CB 1:"+sourceLines[0];
 		let i=0;
 		let alreadyIncludesDebugger = false;
 		for(i=1;i<sourceLines.length;i++) {
@@ -478,9 +484,19 @@ export class MockDebugSession extends LoggingDebugSession {
 				alreadyIncludesDebugger = true;
 				break;
 			}
-			let line = sourceLines[i].trim();
-			if (line.length>0 && !line.startsWith("'") && !line.startsWith(".")) {
-				sourceLines[i] = `@___DEBUG_CB ${i}:${sourceLines[i]}`;
+			let line = sourceLines[i].trim().toLocaleLowerCase();
+
+			if (line.length>0 
+				&& !line.startsWith("'") 
+				&& !line.startsWith(".")
+				&& !line.startsWith("data ")
+				&& !line.startsWith("da.")
+				&& !line.startsWith("proc ")
+				&& !line.startsWith("pr.")
+				&& !line.startsWith("endproc")
+				&& !line.startsWith("endp.")
+			) {
+				sourceLines[i] = `@___DEBUG_CB ${i+1}:${sourceLines[i]}`;
 			}
 			
 		}
@@ -492,6 +508,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// Save the new code
 		this._fileAccessor.writeFile(file, new TextEncoder().encode(sourceLines.join("\n")));
+		return lineCount;
 	}
 	
 
@@ -844,15 +861,16 @@ export class MockDebugSession extends LoggingDebugSession {
 		let dapVariable: DebugProtocol.Variable = {
 			name: v.name,
 			value: '???',
-			type: Array.isArray(v.value) ? typeof v.value : v.type ,
-			variablesReference: 0,
-			evaluateName: '$' + v.name
+			type: v.type ,
+			variablesReference: 0//,
+			//evaluateName: '$' + v.name
 		};
 
 		if (Array.isArray(v.value)) {
 			dapVariable.value = `${v.value[0].type} Array (${v.value.length-1})`;
 			v.reference ??= this._variableHandles.create(v);
 			dapVariable.variablesReference = v.reference;
+			dapVariable.presentationHint = {attributes: ["readOnly"]};
 		} else {
 			switch (v.type) {
 				case 'Byte':
@@ -872,6 +890,7 @@ export class MockDebugSession extends LoggingDebugSession {
 						dapVariable.value = `"${v.value}"`;
 					} else {
 						dapVariable.value = `uninitialized`;
+						dapVariable.presentationHint = {attributes: ["readOnly"]};
 					}
 					
 					break;

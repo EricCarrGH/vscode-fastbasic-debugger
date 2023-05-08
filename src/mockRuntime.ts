@@ -629,7 +629,24 @@ export class MockRuntime extends EventEmitter {
 		switch (type) {
 			case VAR_WORD : return array[offset] + array[offset+1]*256;
 			case VAR_BYTE : return array[offset];
-			case VAR_FLOAT: return 12.34; // TODO - parsee Atari 6-byte BCD
+			case VAR_FLOAT: 
+				// Parse Atari 6-byte BCD
+				let value = '';
+				for (let i=1;i<6;i++) {
+					if (array[offset+i]<=9) {value +='0';}
+					value += array[offset+i].toString(16);
+				}
+				// Add decimal point
+				value = value.substring(0,2) + '.' + value.substring(2);
+
+				// Negative value?
+				if (array[offset] & 0x80) {value ='-' + value;}
+
+				// Add Exponent
+				value+="e" + 2*((array[offset] & 0x7F)-0x40);
+
+				return parseFloat(value);
+				
 			case VAR_STRING: return new TextDecoder().decode(array.slice(offset+1,offset+array[offset]+1));
 			default: return 0;
 		}
@@ -638,13 +655,39 @@ export class MockRuntime extends EventEmitter {
 	private setAtariValue(array:Uint8Array, offset: number, type: string, value) : number {
 		switch (type) {
 			case VAR_WORD : 
-				array[offset] = Number(value) % 256; array[offset+1] = Number(value)/256;
+				array[offset] = Number(value) % 256;
+				array[offset+1] = Number(value)/256;
 				return 2;
 			case VAR_BYTE : 
 				array[offset] = Number(value) % 256;
 				return 1;
 			case VAR_FLOAT: 
-				return 6; // TODO - parse Atari 6-byte BCD
+				// Store Atari 6-byte BCD
+
+				// Convert to e notation
+				let val = value.toExponential(9).toLowerCase();
+				let negative = false;
+
+				// Strip negative sign and decimal from the number
+				if (val[0]==='-') { negative=true; val=val.slice(1);}
+				val = val[0] + val.slice(2);
+
+				// Shift value/exponent if neccessary
+				let exponent = parseInt(val.slice(11))-1;
+				if (exponent % 2 !== 0) {
+					val = '0' + val.slice(0,9);
+					exponent++;
+				}
+
+				// Set sign/exponent byte
+				array[offset] = (negative ? 0x80 : 0) + 0x40+(exponent/2);
+
+				// Set 5 number bytes
+				for (let i=0;i<5;i++) {
+					array[offset+1+i] = parseInt(val.slice(i*2,i*2+2), 16);
+				}
+				
+				return 6; 
 			case VAR_STRING: 
 				array[offset] = String(value).length;
 				array.set(new TextEncoder().encode(String(value)), offset+1);
@@ -652,4 +695,27 @@ export class MockRuntime extends EventEmitter {
 			default: return 0;
 		}
 	}
+
+	/*
+	Atari BCD notes:
+	00 00 00 00 00 00
+  Cn - Negative
+	4n - Positive
+   N - decimal position
+	40 10 00 00 00 00 = 10
+	41 10 00 00 00 00 = 1000
+	42 10 00 00 00 00 = 100000
+	40 12 34 ..       = 12.34
+	41 12 34 ..       = 1234
+	40 01 23 ..       =  1.23
+	41 01 23 ..       =  123
+  3F 01 23 ..       =  .0123 or 1.23E-2
+	3E 01 23 ..       =  .000123 or 1.23-4
+	3F 12 30 ..       =  .123 or 1.23E-1
+	3E 12 30 ..       =  .00123 or 1.23E-3
+	First byte:
+	[Sign] [Exponent sign] [ E-N*2]
+	
+	so, First byte = (0x80 or 128) if negative + (0x40 or 64) + (Exponent/2)
+	*/
 }
