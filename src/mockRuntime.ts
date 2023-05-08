@@ -529,6 +529,10 @@ export class MockRuntime extends EventEmitter {
 									// Update real memory location for each string in the array in case user wants to update it
 									v.value[i].memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
 									heapIndex+=2;
+								} else {
+									if (v.memLoc>0) {
+										v.value[i].memLoc = v.memLoc + i*v.value[i].byteLen;
+									}
 								}
 								
 								v.value[i].setValueFromSource(this.getAtariValue(debugFileResponse, heapIndex, v.type));
