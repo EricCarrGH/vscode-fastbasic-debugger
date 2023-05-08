@@ -68,7 +68,8 @@ PROC ___DEBUG_DUMP
       while ___DEBUG_LEN>0
           
           '? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
-          bput #4, &___DEBUG_MEM, 2
+					
+          bput #4, ___DEBUG_MEM, 2
           bput #4, dpeek(___DEBUG_MEM), 256
           IF ___DEBUG_MEM>0
             inc ___DEBUG_MEM: inc ___DEBUG_MEM
@@ -322,8 +323,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsInstructionBreakpoints = false;
 
 		// make VS Code able to read and write variable memory
-		response.body.supportsReadMemoryRequest = true;
-		response.body.supportsWriteMemoryRequest = true;
+		response.body.supportsReadMemoryRequest = false;
+		response.body.supportsWriteMemoryRequest = false;
 
 		response.body.supportSuspendDebuggee = true;
 		response.body.supportTerminateDebuggee = true;
@@ -608,43 +609,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async writeMemoryRequest(response: DebugProtocol.WriteMemoryResponse, { data, memoryReference, offset = 0 }: DebugProtocol.WriteMemoryArguments) {
-		const variable = this._variableHandles.get(Number(memoryReference));
-		if (typeof variable === 'object') {
-			const decoded = base64.toByteArray(data);
-			variable.setMemory(decoded, offset);
-			response.body = { bytesWritten: decoded.length };
-		} else {
-			response.body = { bytesWritten: 0 };
-		}
-
-		this.sendResponse(response);
-		this.sendEvent(new InvalidatedEvent(['variables']));
-	}
-
-	protected async readMemoryRequest(response: DebugProtocol.ReadMemoryResponse, { offset = 0, count, memoryReference }: DebugProtocol.ReadMemoryArguments) {
-		const variable = this._variableHandles.get(Number(memoryReference));
-		if (typeof variable === 'object' && variable.memory) {
-			const memory = variable.memory.subarray(
-				Math.min(offset, variable.memory.length),
-				Math.min(offset + count, variable.memory.length),
-			);
-
-			response.body = {
-				address: offset.toString(),
-				data: base64.fromByteArray(memory),
-				unreadableBytes: count - memory.length
-			};
-		} else {
-			response.body = {
-				address: offset.toString(),
-				data: '',
-				unreadableBytes: count
-			};
-		}
-
-		this.sendResponse(response);
-	}
 
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
 
@@ -904,17 +868,17 @@ export class MockDebugSession extends LoggingDebugSession {
 					dapVariable.value = v.value.toString();
 					break;
 				case 'String':
-					dapVariable.value = `"${v.value}"`;
+					if (v.memLoc > 0 ) {
+						dapVariable.value = `"${v.value}"`;
+					} else {
+						dapVariable.value = `uninitialized`;
+					}
+					
 					break;
 				default:
 					dapVariable.value = typeof v.value;
 					break;
 			}
-		}
-	
-		if (v.memory) {
-			v.reference ??= this._variableHandles.create(v);
-			dapVariable.memoryReference = String(v.reference);
 		}
 
 		return dapVariable;

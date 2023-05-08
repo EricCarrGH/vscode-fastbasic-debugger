@@ -1,20 +1,18 @@
 A=1
 ? "A = "; A
 ? "Again, A = "; A
-@test
+
 hello$ = "Hello World"
 ? hello$
 
-dim ID(10), Name$(10)
+dim ID(3), player$(3)
 
-for i=0 to 10
+for i=0 to 3
   id(i) = i
+  player$(i) = "PLAYER "
+  player$(i) =+str$(i)
 next i
 
-? id(4)
-
-z=45
-
-proc test
-dim zz$(20)
-endproc
+for i=0 to 3
+  ? "Hello "; player$(i)
+next i

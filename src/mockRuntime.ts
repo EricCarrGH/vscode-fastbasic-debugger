@@ -40,8 +40,6 @@ interface IRuntimeStack {
 export type IRuntimeVariableType = number  | string | RuntimeVariable[];
 
 export class RuntimeVariable {
-	private _memory?: Uint8Array;
-
 	public reference?: number;
 
 	public memLoc: number = 0;
@@ -53,7 +51,6 @@ export class RuntimeVariable {
 
 	public set value(value: IRuntimeVariableType) {
 		this._value = value;
-		this._memory = undefined;
 		this.modified = true;
 	}
 
@@ -61,25 +58,8 @@ export class RuntimeVariable {
 		this._value = value;
 	}
 
-	public get memory() {
-		if (this._memory === undefined && typeof this._value === 'string') {
-			this._memory = new TextEncoder().encode(this._value);
-		}
-		return this._memory;
-	}
 
 	constructor(public readonly name: string, private _value: IRuntimeVariableType, public readonly type: string, public readonly byteLen: number) {}
-
-	public setMemory(data: Uint8Array, offset = 0) {
-		const memory = this.memory;
-		if (!memory) {
-			return;
-		}
-
-		memory.set(data, offset);
-		this._memory = memory;
-		this._value = new TextDecoder().decode(memory);
-	}
 }
 
 interface Word {
@@ -422,7 +402,7 @@ export class MockRuntime extends EventEmitter {
 						if (arraySize < 256) {
 							value = [];
 							for(let k=0;k<arraySize;k++) {
-								value.push(new RuntimeVariable(k.toString(), varType === VAR_STRING ? "":0, varType, 0));
+								value.push(new RuntimeVariable(k.toString(), varType === VAR_STRING ? "":0, varType, Number(VAR_TYPE_LEN.get(varType))));
 							}
 						}
 						break;
@@ -550,6 +530,7 @@ export class MockRuntime extends EventEmitter {
 									v.value[i].memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
 									heapIndex+=2;
 								}
+								
 								v.value[i].setValueFromSource(this.getAtariValue(debugFileResponse, heapIndex, v.type));
 								heapIndex += typeLen;
 							}
@@ -598,19 +579,18 @@ export class MockRuntime extends EventEmitter {
 					v.value.forEach(va => {
 						if (va.modified) {
 							va.modified=false;
+					
 							this.setAtariWord(payload, index, va.memLoc);
-							this.setAtariWord(payload, index+2, va.byteLen);
-							if (!Array.isArray(va.value)) {
-								index += this.setAtariValue(payload, index+4, va.type, va.value);
-							}
-							index+=4;
+							let len = this.setAtariValue(payload, index+4, va.type, va.value); 
+							this.setAtariWord(payload, index+2, len);
+							index+=4+len;
 						}
 					});
 				} else {
 					this.setAtariWord(payload, index, v.memLoc);
-					this.setAtariWord(payload, index+2, v.byteLen);
-					index += this.setAtariValue(payload, index+4, v.type, v.value);
-					index+=4;
+					let len = this.setAtariValue(payload, index+4, v.type, v.value); 
+					this.setAtariWord(payload, index+2, len);
+					index+=4+len;
 				}
 				
 			} 
@@ -651,7 +631,7 @@ export class MockRuntime extends EventEmitter {
 		}
 	}
 
-	private setAtariValue(array:Uint8Array, offset: number, type: string, value: number | string) : number {
+	private setAtariValue(array:Uint8Array, offset: number, type: string, value) : number {
 		switch (type) {
 			case VAR_WORD : 
 				array[offset] = Number(value) % 256; array[offset+1] = Number(value)/256;
