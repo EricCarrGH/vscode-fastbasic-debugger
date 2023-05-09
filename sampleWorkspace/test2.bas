@@ -1,6 +1,12 @@
-a=1
+A=1
 ? "A = "; A
 ? "A = "; A
+
+? "Address of A"; &A
+
+a=23543
+
+loc = &a
 
 hello$ = "Hello World"
 ? HELLO$

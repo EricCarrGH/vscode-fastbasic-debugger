@@ -929,13 +929,31 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		let reply: string | undefined;
 		let rv: RuntimeVariable | undefined;
-    let name = args.expression.toUpperCase();
+
+    let nameParts = args.expression.toUpperCase().split("(");
+		let name = nameParts[0];
+		if (name[0]==='&') {
+			name=name.slice(1);
+		}
+		
 		rv = this._runtime.getLocalVariable(name)
 			?? this._runtime.getLocalVariable(name + "$") 
 			?? this._runtime.getLocalVariable(name + "%");
 	  
+			
+
 		if (rv) {
 			const v = this.convertFromRuntime(rv);
+			
+			if (rv.memLoc>0) {
+				if (!isNaN(Number(v.value)) && v.value.indexOf(".")<0)  {
+					v.value = v.value + ' $' + Number(v.value).toString(16).toUpperCase();
+				}
+				v.value += `  |  ADR=$${rv.memLoc.toString(16).toUpperCase()}`;
+			} else {
+				v.value="uninitialized";
+			}
+			
 			response.body = {
 				result: v.value,
 				type: v.type,
