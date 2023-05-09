@@ -3,7 +3,8 @@ a=1
 ? "A = "; A
 
 hello$ = "Hello World"
-? hello$
+? HELLO$
+
 
 dim ID(3), player$(3)
 
@@ -35,10 +36,10 @@ f%(8)=.00000123
 f%(9)=.1234567891
 f%(10)=.12345678912
 ? &e
-do
+'do
 gr.0:
 ? h%
 for i=0 to 10:? f%(i):next i
 
 inc j
-loop
+'loop

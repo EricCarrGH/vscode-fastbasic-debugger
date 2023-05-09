@@ -9,8 +9,6 @@
 			"request": "launch",
 			"name": "Debug FastBasic",
 			"sourceFile": "${file}",
-			"stopOnEntry": true,
-			"trace": true,
 			"compilerPath": "C:\\Projects\\FastBasic\\build\\compiler\\fastbasic.exe",
 			"emulatorPath": "C:/atari/Altirra/Altirra64.exe"
 		}

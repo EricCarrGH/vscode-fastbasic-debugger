@@ -19,7 +19,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 
 	//fastBasicChannel = vscode.window.createTerminal("FastBasic");
 	fastBasicChannel = vscode.window.createOutputChannel("FastBasic");
-
+  
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.fastbasic-debugger.runEditorContents', (resource: vscode.Uri) => {
 			let targetResource = resource;

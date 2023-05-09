@@ -15,7 +15,7 @@ import {
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	InvalidatedEvent,
-	Scope, Source, Handles, Breakpoint, MemoryEvent, Thread, StackFrame
+	Scope, Source, Handles, Breakpoint, MemoryEvent, Thread, StackFrame, ExitedEvent
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
@@ -182,7 +182,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _valuesInHex = false;
 	private _useInvalidatedEvent = false;
 
-  private _fileAccessor : FileAccessor;
+	private _fileAccessor: FileAccessor;
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
 	 * We configure the default implementation of a debug adapter here.
@@ -226,7 +226,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('output', (type, text, filePath, line, column) => {
 
 			let category: string;
-			switch(type) {
+			switch (type) {
 				case 'prio': category = 'important'; break;
 				case 'out': category = 'stdout'; break;
 				case 'err': category = 'stderr'; break;
@@ -245,6 +245,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			this.sendEvent(e);
 		});
 		this._runtime.on('end', () => {
+			this.sendEvent(new OutputEvent(`Program completed.\n`, "stdio"));
 			this.sendEvent(new TerminatedEvent());
 		});
 	}
@@ -273,16 +274,16 @@ export class MockDebugSession extends LoggingDebugSession {
 		// make VS Code show a 'step back' button
 		response.body.supportsStepBack = false;
 
-	
+
 		// make VS Code support data breakpoints
 		response.body.supportsDataBreakpoints = true;
 
 		// make VS Code support completion in REPL
 		response.body.supportsCompletionsRequest = true;
-		response.body.completionTriggerCharacters = [ ".", "[" ];
+		response.body.completionTriggerCharacters = [".", "["];
 
 		// make VS Code send cancel request
-		response.body.supportsCancelRequest = true;
+		response.body.supportsCancelRequest = false;
 
 		// make VS Code send the breakpointLocations request
 		response.body.supportsBreakpointLocationsRequest = true;
@@ -312,7 +313,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// make VS Code send setVariable request
 		response.body.supportsSetVariable = true;
-		
+
 		// make VS Code send setExpression request
 		response.body.supportsSetExpression = true;
 
@@ -325,8 +326,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsReadMemoryRequest = false;
 		response.body.supportsWriteMemoryRequest = false;
 
-		response.body.supportSuspendDebuggee = true;
-		response.body.supportTerminateDebuggee = true;
+		response.body.supportSuspendDebuggee = false;
+		response.body.supportTerminateDebuggee = false;
 		response.body.supportsFunctionBreakpoints = true;
 
 		this.sendResponse(response);
@@ -361,14 +362,14 @@ export class MockDebugSession extends LoggingDebugSession {
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 		//logger.log("Unable to compile!", Logger.LogLevel.Stop);
-/*
-		this.sendErrorResponse(response, {
-			id: 1001,
-			format: `compile error: some fake error.`,//, 
-			showUser: true //args.compileError === 'show' ? true : (args.compileError === 'hide' ? false : undefined)
-		});
-		return;
-*/
+		/*
+				this.sendErrorResponse(response, {
+					id: 1001,
+					format: `compile error: some fake error.`,//, 
+					showUser: true //args.compileError === 'show' ? true : (args.compileError === 'hide' ? false : undefined)
+				});
+				return;
+		*/
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
@@ -377,25 +378,25 @@ export class MockDebugSession extends LoggingDebugSession {
 		var folderDelimiter = isWindows ? "\\" : "/";
 		let file = args.sourceFile;
 		let fileParts = file.split(folderDelimiter);
-		let filename = fileParts[fileParts.length-1];
-		let filenameNoExt = filename.split(".")[0]+".";
-    fileParts[fileParts.length-1] ="bin";
+		let filename = fileParts[fileParts.length - 1];
+		let filenameNoExt = filename.split(".")[0] + ".";
+		fileParts[fileParts.length - 1] = "bin";
 		let binFolder = fileParts.join(folderDelimiter);
 		await vscode.workspace.fs.createDirectory(vscode.Uri.file(binFolder));
 
 		// Delete existing files for this source file
 		var files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(binFolder));
-		for(let i=0;i<files.length;i++) {
+		for (let i = 0; i < files.length; i++) {
 			if (files[i][0].startsWith(filenameNoExt)) {
-				await vscode.workspace.fs.delete( vscode.Uri.file(binFolder+folderDelimiter+files[i][0]), {useTrash: false});
+				await vscode.workspace.fs.delete(vscode.Uri.file(binFolder + folderDelimiter + files[i][0]), { useTrash: false });
 			}
 		};
-		
+
 		// Copy the source file to the bin folder 
-		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder+folderDelimiter+filename));
-    
+		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder + folderDelimiter + filename));
+
 		// Inject debugger code into the bin source file copy
-		let lineCount = await this.injectDebuggerCode(binFolder+folderDelimiter+filename);
+		let lineCount = await this.injectDebuggerCode(binFolder + folderDelimiter + filename);
 
 		// Check if the compiler exists
 		if (!await this._fileAccessor.doesFileExist(args.compilerPath)) {
@@ -409,8 +410,12 @@ export class MockDebugSession extends LoggingDebugSession {
 		fastBasicChannel.clear();
 		fastBasicChannel.show(true);
 		fastBasicChannel.appendLine(`Compiling ${filename} using FastBasic Compiler..`);
+
+		
+		//this.sendEvent(new OutputEvent(`Compiling ${filename} using FastBasic Compiler..\n`, "stdio"));
+
 		let wroteError = false;
-		cp.execFile(`${args.compilerPath}`,[ filename ], { cwd:binFolder+folderDelimiter}, (err, stdout) => {
+		cp.execFile(`${args.compilerPath}`, [filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
 			if (err) {
 
 				// Strip the first two lines as they do not add value, unless they are unexpected
@@ -421,35 +426,51 @@ export class MockDebugSession extends LoggingDebugSession {
 				if (error[0].startsWith("BAS compile '")) {
 					error = error.slice(1);
 				}
-				
+
 				// Remove debugging code from error output
 				let errorMessage = error.join("\n");
-				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+):(\d+):/gi, (s,ext,row,col) => {
-					return `.${ext}:${row}:${col-(row>1? 15:30)}: `;
-				} );
+				let line = 1, column = 1;
+				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+):(\d+):/gi, (s, ext, row, col) => {
+					column = col - (row > 1 ? 15 : 30);
+					line = row;
+					return `.${ext}:${row}:${column}: `;
+				});
 
-				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+): /gi, (s,ext,row) => {
-					return `.${ext}:${Math.min(row, lineCount)}: `;
-				} );
+				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+): /gi, (s, ext, row) => {
+					line = Math.min(row, lineCount);
+					return `.${ext}:${line}: `;
+				});
 
-				errorMessage = errorMessage.replace(/@___DEBUG_CB \d+:/gi,"");
-				errorMessage = errorMessage.replace("@___DEBUG_POLL:","");
-				
-				wroteError = errorMessage.length>0;
+				errorMessage = errorMessage.replace(/@___DEBUG_CB \d+:/gi, "");
+				errorMessage = errorMessage.replace("@___DEBUG_POLL:", "");
+
+				wroteError = errorMessage.length > 0;
 				fastBasicChannel.appendLine("\n" + errorMessage);
-			}
-			fastBasicChannel.appendLine(stdout);
-		});
 
+				//let category = 'stderr'; // stdout
+
+				/*const e: DebugProtocol.OutputEvent = new OutputEvent(`${errorMessage}\n`, category);
+				e.body.source = new Source(basename(file), this.convertDebuggerPathToClient(file), undefined, undefined, 'fastbasic-debugger');
+				e.body.line = Number(line); //this.convertDebuggerLineToClient(line);
+				e.body.column = Number(column); // this.convertDebuggerColumnToClient(column);
+				this.sendEvent(e);
+				*/
+				this.sendEvent(new ExitedEvent(0));
+				this.sendEvent(new TerminatedEvent());
+			}
+		});
+		if (wroteError) {
+			return undefined;
+		}
 		// Wait until the XEX file is created
-		let atariExecutable = binFolder+folderDelimiter+filenameNoExt+"xex";
+		let atariExecutable = binFolder + folderDelimiter + filenameNoExt + "xex";
 		if (!wroteError) {
 			await this._fileAccessor.waitUntilFileExists(atariExecutable, 10000);
 		}
 
 		if (! await this._fileAccessor.doesFileExist(atariExecutable)) {
 			if (!wroteError) {
-				fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
+			//	fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
 			}
 			//response.success = false;
 			this.sendEvent(new TerminatedEvent());
@@ -472,13 +493,13 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	private async injectDebuggerCode(file: string) : Promise<number> {
+	private async injectDebuggerCode(file: string): Promise<number> {
 		let sourceLines = new TextDecoder().decode(await this._fileAccessor.readFile(file)).split(/\r?\n/);
 		let lineCount = sourceLines.length;
-		sourceLines[0] = "@___DEBUG_POLL:@___DEBUG_CB 1:"+sourceLines[0];
-		let i=0;
+		sourceLines[0] = "@___DEBUG_POLL:@___DEBUG_CB 1:" + sourceLines[0];
+		let i = 0;
 		let alreadyIncludesDebugger = false;
-		for(i=1;i<sourceLines.length;i++) {
+		for (i = 1; i < sourceLines.length; i++) {
 			// Exit if reaching end (to allow testing debug code post end)
 			if (sourceLines[i] === "'___PROGRAM_END___") {
 				alreadyIncludesDebugger = true;
@@ -486,8 +507,8 @@ export class MockDebugSession extends LoggingDebugSession {
 			}
 			let line = sourceLines[i].trim().toLocaleLowerCase();
 
-			if (line.length>0 
-				&& !line.startsWith("'") 
+			if (line.length > 0
+				&& !line.startsWith("'")
 				&& !line.startsWith(".")
 				&& !line.startsWith("data ")
 				&& !line.startsWith("da.")
@@ -496,12 +517,12 @@ export class MockDebugSession extends LoggingDebugSession {
 				&& !line.startsWith("endproc")
 				&& !line.startsWith("endp.")
 			) {
-				sourceLines[i] = `@___DEBUG_CB ${i+1}:${sourceLines[i]}`;
+				sourceLines[i] = `@___DEBUG_CB ${i + 1}:${sourceLines[i]}`;
 			}
-			
+
 		}
 		// Don't end program until key press in debug mode
-		sourceLines.splice(i,0,"@___DEBUG_END");
+		sourceLines.splice(i, 0, "@___DEBUG_END");
 		if (!alreadyIncludesDebugger) {
 			sourceLines = sourceLines.concat(DEBUGGER_STUB.split("\n"));
 		}
@@ -510,7 +531,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._fileAccessor.writeFile(file, new TextEncoder().encode(sourceLines.join("\n")));
 		return lineCount;
 	}
-	
+
 
 
 	protected setFunctionBreakPointsRequest(response: DebugProtocol.SetFunctionBreakpointsResponse, args: DebugProtocol.SetFunctionBreakpointsArguments, request?: DebugProtocol.Request): void {
@@ -584,9 +605,9 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 
-	
+
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
-		
+
 		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
 		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
 		const endFrame = startFrame + maxLevels;
@@ -615,12 +636,12 @@ export class MockDebugSession extends LoggingDebugSession {
 		};
 		this.sendResponse(response);
 	}
-	
+
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
 
 		response.body = {
 			scopes: [
-				new Scope("Global",this._variableHandles.create('locals'), false)
+				new Scope("Global", this._variableHandles.create('locals'), false)
 			]
 		};
 		this.sendResponse(response);
@@ -640,19 +661,19 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		response.body = {
-			variables: vs.filter(v=> inArray || v.memLoc>0).map(v => this.convertFromRuntime(v))
+			variables: vs.filter(v => inArray || v.memLoc > 0).map(v => this.convertFromRuntime(v))
 		};
 		this.sendResponse(response);
 	}
 
 	protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
-		
+
 		const container = this._variableHandles.get(args.variablesReference);
 		const rv = container === 'locals'
 			? this._runtime.getLocalVariable(args.name)
 			: container instanceof RuntimeVariable && container.value instanceof Array
-			? container.value.find(v => v.name === args.name)
-			: undefined;
+				? container.value.find(v => v.name === args.name)
+				: undefined;
 
 		if (rv) {
 			rv.value = this.convertToRuntime(args.value);
@@ -662,12 +683,12 @@ export class MockDebugSession extends LoggingDebugSession {
 			}
 
 			//if (rv.memory && rv.reference) {
-//				this.sendEvent(new MemoryEvent(String(rv.reference), 0, 2)); //rv.memory.length));
-		//	}
+			//				this.sendEvent(new MemoryEvent(String(rv.reference), 0, 2)); //rv.memory.length));
+			//	}
 		}
-	//	this._runtime.setVariable(args.name, args.value);
-	//	this.sendResponse(response);
-	//	return;
+		//	this._runtime.setVariable(args.name, args.value);
+		//	this.sendResponse(response);
+		//	return;
 
 		this.sendResponse(response);
 	}
@@ -724,16 +745,16 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 	}
 
-	
+
 
 	protected dataBreakpointInfoRequest(response: DebugProtocol.DataBreakpointInfoResponse, args: DebugProtocol.DataBreakpointInfoArguments): void {
 
 		response.body = {
-            dataId: null,
-            description: "cannot break on data access",
-            accessTypes: undefined,
-            canPersist: false
-        };
+			dataId: null,
+			description: "cannot break on data access",
+			accessTypes: undefined,
+			canPersist: false
+		};
 
 		if (args.variablesReference && args.name) {
 			//const v = this._variableHandles.get(args.variablesReference);
@@ -830,9 +851,9 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected customRequest(command: string, response: DebugProtocol.Response, args: any) {
 		if (command === 'toggleFormatting') {
-			this._valuesInHex = ! this._valuesInHex;
+			this._valuesInHex = !this._valuesInHex;
 			if (this._useInvalidatedEvent) {
-				this.sendEvent(new InvalidatedEvent( ['variables'] ));
+				this.sendEvent(new InvalidatedEvent(['variables']));
 			}
 			this.sendResponse(response);
 		} else {
@@ -844,10 +865,10 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private convertToRuntime(value: string): IRuntimeVariableType {
 
-		value= value.trim();
+		value = value.trim();
 
 		if (value[0] === '\'' || value[0] === '"') {
-			return value.substr(1, value.length-2);
+			return value.substr(1, value.length - 2);
 		}
 		const n = parseFloat(value);
 		if (!isNaN(n)) {
@@ -861,16 +882,16 @@ export class MockDebugSession extends LoggingDebugSession {
 		let dapVariable: DebugProtocol.Variable = {
 			name: v.name,
 			value: '???',
-			type: v.type ,
-			variablesReference: 0//,
-			//evaluateName: '$' + v.name
+			type: v.type,
+			variablesReference: 0,
+			evaluateName: v.name
 		};
 
 		if (Array.isArray(v.value)) {
-			dapVariable.value = `${v.value[0].type} Array (${v.value.length-1})`;
+			dapVariable.value = `${v.value[0].type} Array (${v.value.length - 1})`;
 			v.reference ??= this._variableHandles.create(v);
 			dapVariable.variablesReference = v.reference;
-			dapVariable.presentationHint = {attributes: ["readOnly"]};
+			dapVariable.presentationHint = { attributes: ["readOnly"] };
 		} else {
 			switch (v.type) {
 				case 'Byte':
@@ -886,13 +907,13 @@ export class MockDebugSession extends LoggingDebugSession {
 					dapVariable.value = v.value.toString();
 					break;
 				case 'String':
-					if (v.memLoc > 0 ) {
+					if (v.memLoc > 0) {
 						dapVariable.value = `"${v.value}"`;
 					} else {
 						dapVariable.value = `uninitialized`;
-						dapVariable.presentationHint = {attributes: ["readOnly"]};
+						dapVariable.presentationHint = { attributes: ["readOnly"] };
 					}
-					
+
 					break;
 				default:
 					dapVariable.value = typeof v.value;
@@ -903,6 +924,33 @@ export class MockDebugSession extends LoggingDebugSession {
 		return dapVariable;
 	}
 
+	
+	protected async evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): Promise<void> {
+
+		let reply: string | undefined;
+		let rv: RuntimeVariable | undefined;
+    let name = args.expression.toUpperCase();
+		rv = this._runtime.getLocalVariable(name)
+			?? this._runtime.getLocalVariable(name + "$") 
+			?? this._runtime.getLocalVariable(name + "%");
+	  
+		if (rv) {
+			const v = this.convertFromRuntime(rv);
+			response.body = {
+				result: v.value,
+				type: v.type,
+				variablesReference: v.variablesReference,
+				presentationHint: v.presentationHint
+			};
+		} else {
+			response.body = {
+				result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,
+				variablesReference: 0
+			};
+		}
+
+		this.sendResponse(response);
+	}
 
 	private formatNumber(x: number) {
 		return this._valuesInHex ? '0x' + x.toString(16) : x.toString(10);
