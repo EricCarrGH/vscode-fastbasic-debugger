@@ -1,11 +1,11 @@
 {
   "workbench.colorTheme": "Default Dark Modern",
-  "editor.fontFamily": "Atari Classic Chunky",
+  //"editor.fontFamily": "Atari Classic Chunky",
   "editor.fontSize": 12,
-  "editor.cursorStyle": "block",
-  "debug.console.closeOnEnd": false,
-  "debug.console.fontFamily": "Atari Classic Chunky",
-  "debug.openDebug": "openOnSessionStart",
+  //"editor.cursorStyle": "block",
+  //"debug.console.closeOnEnd": false,
+  //"debug.console.fontFamily": "Atari Classic Chunky",
+  //"debug.openDebug": "openOnSessionStart",
   "debug.toolBarLocation": "docked",
 
 }

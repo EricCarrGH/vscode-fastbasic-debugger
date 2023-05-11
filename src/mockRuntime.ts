@@ -81,6 +81,11 @@ const VAR_TYPE_LEN: Map<string, number> = new Map([
 	[VAR_STRING, 256]
 ]);
 
+enum MessageCommand {
+	Continue = 1,
+	StepNext = 2
+} 
+
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "Mock") "execution engine with debugging support":
@@ -130,7 +135,9 @@ export class MockRuntime extends EventEmitter {
 	public instruction= 0;
 
 	// maps from sourceFile to array of IRuntimeBreakpoint
-	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
+	public breakPoints = new Map<string, IRuntimeBreakpoint[]>();
+
+	private clearedBreakPoints = new Array<IRuntimeBreakpoint>();
 
 	// all instruction breakpoint addresses
 	private instructionBreakpoints = new Set<number>();
@@ -139,8 +146,12 @@ export class MockRuntime extends EventEmitter {
 	// so that the frontend can match events with breakpoints.
 	private breakpointId = 1;
 
-	private breakAddresses = new Map<string, string>();
-
+	private _breakAddresses = new Map<string, string>();
+	private _addressToLineMap = new Map<number, number>();
+	private _lineToAddressMap = new Map<number, number>();
+  private _debugCheckAddress: number = 0;
+	private _debugBreakAddress: number = 0;
+	
 	constructor(private fileAccessor: FileAccessor) {
 		super();
 	}
@@ -156,8 +167,8 @@ export class MockRuntime extends EventEmitter {
 		if (debug) {
 			// Load the source, which creates the memory dump file
 			await this.loadSource(program);
-			// Send breakpoints to start communication with the program before launching it
-			await this.sendBreakpointsAndVars(1);
+			// Send initial message to start communication with the program before launching it
+			await this.sendMessageToProgram(MessageCommand.Continue);
 		}
 
 			// send 'stopped' event
@@ -182,7 +193,7 @@ export class MockRuntime extends EventEmitter {
 	 * Continue execution to the next breakpoint or end of program
 	 */
 	public async continue() {
-		await this.sendBreakpointsAndVars(1);
+		await this.sendMessageToProgram(MessageCommand.Continue);
 		await this.waitOnProgram();
 	}
 
@@ -190,7 +201,7 @@ export class MockRuntime extends EventEmitter {
 	 * Step forward to the next line.
 	 */
 	public async step() {
-		await this.sendBreakpointsAndVars(2);
+		await this.sendMessageToProgram(MessageCommand.StepNext);
 		await this.waitOnProgram();
 	}
 
@@ -237,7 +248,8 @@ export class MockRuntime extends EventEmitter {
 			const index = bps.findIndex(bp => bp.line === line);
 			if (index >= 0) {
 				const bp = bps[index];
-				bps.splice(index, 1);
+				bps.splice(index, 1)
+				this.clearedBreakPoints.push(bp);
 				return bp;
 			}
 		}
@@ -245,6 +257,12 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	public clearBreakpoints(path: string): void {
+		const bps = this.breakPoints.get(this.normalizePathAndCasing(path));
+		if (bps) {
+			for (let i=0;i<bps.length;i++) {
+				this.clearedBreakPoints.push(bps[i]);
+			}
+		}
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
@@ -252,19 +270,19 @@ export class MockRuntime extends EventEmitter {
 
 		const x = accessType === 'readWrite' ? 'read write' : accessType;
 
-		const t = this.breakAddresses.get(address);
+		const t = this._breakAddresses.get(address);
 		if (t) {
 			if (t !== x) {
-				this.breakAddresses.set(address, 'read write');
+				this._breakAddresses.set(address, 'read write');
 			}
 		} else {
-			this.breakAddresses.set(address, x);
+			this._breakAddresses.set(address, x);
 		}
 		return true;
 	}
 
 	public clearAllDataBreakpoints(): void {
-		this.breakAddresses.clear();
+		this._breakAddresses.clear();
 	}
 
 	public setExceptionsFilters(namedException: string | undefined, otherExceptions: boolean): void {
@@ -324,10 +342,10 @@ export class MockRuntime extends EventEmitter {
 		}
 	}
 
-	private async initializeContents(memory: Uint8Array, list: Uint8Array, refs: Uint8Array) {
+	private async initializeContents(memory: Uint8Array, list: Uint8Array, labels: Uint8Array) {
 		this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
 		let listLines = new TextDecoder().decode(list).split(/\r?\n/);
-		let refsLines = new TextDecoder().decode(refs).split(/\r?\n/);
+		let labelLines = new TextDecoder().decode(labels).split(/\r?\n/);
 
 		/* Reference
 		000006r 1               	.export fb_var_AB
@@ -433,19 +451,43 @@ export class MockRuntime extends EventEmitter {
 		*/
 		this._varMinLoc = 65536;
 		this._varMemSize = 0;
-		for (let i = 0; i < refsLines.length; i++) {
-			let parts = refsLines[i].split('.');
-			if (parts.length>1 && parts[1].startsWith("fb_var_")) {
-				let name = parts[1].substring(7);
-				let v = this.variables.get(name) || this.variables.get(name + "$") || this.variables.get(name + "%");
-				if (v) {
-					let memLoc = parseInt(parts[0].substring(5).trim(), 16);
-					if (memLoc < this._varMinLoc) {
-						this._varMinLoc = memLoc;
+		for (let i = 0; i < labelLines.length; i++) {
+	
+			let parts = labelLines[i].split('.');
+		
+			if (parts.length>1) {
+				if (parts[1]==="fb_lbl____DEBUG_CHECK") {
+					// Get the memory location of debug_check proc, to:
+					// 1. Toggle stepping through code at the start of the proc
+					// 2. Set lines to call it when they don't have a breakpoint set
+					this._debugCheckAddress =  parseInt(parts[0].substring(5).trim(), 16);
+				} else if (parts[1]==="fb_lbl____DEBUG_BREAK") {
+					// Get the memory location of the debug_break proc, to:
+					// 1. Set lines to call it when they have a breakpoint set
+					this._debugBreakAddress =  parseInt(parts[0].substring(5).trim(), 16);
+				} else if (parts[1].startsWith("@FastBasic_LINE_")) {
+					// Get the memory location of each line in memory, to:
+					// 1. Determine which line the program stopped at
+					// 2. Set/clear breakpoints on line
+					let line = parseInt(parts[1].slice(16).split('_')[0]);
+					if (line<= listLines.length) {
+						let memLoc = parseInt(parts[0].substring(5).trim(), 16);
+						this._addressToLineMap.set(memLoc, line);//remove the +1 later
+						this._lineToAddressMap.set(line, memLoc);
 					}
-					v.memLoc = memLoc;
-					this._varMemSize += VAR_TYPE_LEN.get(v.type) || 0;
-				}	
+				} else if (parts[1].startsWith("fb_var_")) {
+					let name = parts[1].substring(7);
+					
+					let v = this.variables.get(name) || this.variables.get(name + "$") || this.variables.get(name + "%");
+					if (v) {
+						let memLoc = parseInt(parts[0].substring(5).trim(), 16);
+						if (memLoc < this._varMinLoc) {
+							this._varMinLoc = memLoc;
+						}
+						v.memLoc = memLoc;
+						this._varMemSize += VAR_TYPE_LEN.get(v.type) || 0;
+					}	
+				}
 			}		
 		}
 
@@ -487,7 +529,11 @@ export class MockRuntime extends EventEmitter {
 				this.sendEvent('end');
 				break;
 			case 1:
-			let currentLine = this.getAtariValue(debugFileResponse, 1, VAR_WORD) ;
+			// Flip the two bytes around since they were in backwards on the stack
+			[debugFileResponse[1], debugFileResponse[2]] = [debugFileResponse[2], debugFileResponse[1]];
+
+			let address = Number(this.getAtariValue(debugFileResponse, 1, VAR_WORD))-3;
+			let currentLine = this._addressToLineMap.get(address) ?? 0;
 			let varIndex = 0;
 			let startingLoc = this._varMinLoc - 3;
 			let heapIndex = this._varMemSize + 3;
@@ -539,7 +585,7 @@ export class MockRuntime extends EventEmitter {
 								heapIndex += typeLen;
 							}
 						}
-						
+				
 						break;
 				} 
 			});
@@ -560,22 +606,63 @@ export class MockRuntime extends EventEmitter {
 		await this.fileAccessor.deleteFile(this._debugFileFromProg);
 	}
 
-	private async sendBreakpointsAndVars(messageMode: number): Promise<void> {
+	private async sendMessageToProgram(command: MessageCommand): Promise<void> {
 		const bps = this.breakPoints.get(this._sourceFile) ?? new Array<IRuntimeBreakpoint>();
 		
-		let payload = new Uint8Array(16000);
-		
-		
-		payload[0] = messageMode;// Send Breakpoints and vars
-		payload[1] = bps.length;// Number of breakpoints
-
-		for (let i=0;i<bps.length;i++) {
-			this.setAtariWord(payload,2+i*2, bps[i].line);
+		// If first line has a breakpoint set, and we are starting, change to step
+		if (this.currentLine<=1 && bps.find(o=> o.line === 1)) {
+			command = MessageCommand.StepNext;
 		}
 
-		// Send any variables to update in form of [word:location][word:length][data]
-		let index = 2+2*bps.length;
+		let payload = new Uint8Array(16000);
+	
+		/* Payload format:
+		0 [byte] Message/command (1 for now)
+		1 [word] Step/Continue memory location (currently debug check address)
+		3 [byte] Step/Continue value
+		4 [word] Location/Value pair count (currenly used to set/clear breakpoints)
+			[word:location][word:value] pairs
+		  [word:location][word:length][data] sets
+		*/
 		
+		payload[0] = 1;// 1 for now. May extend later
+
+		// Set the appropriate memory location for stepping:
+		this.setAtariWord(payload, 1, this._debugCheckAddress);
+		payload[3] = command === MessageCommand.StepNext ? 0x3A : 0x5C;
+		
+		let index = 6;
+		let validBreakpointCount = 0;
+
+		// Clear breakpoints
+		for (let i=0;i<this.clearedBreakPoints.length;i++) {
+			let lineAddress = this._lineToAddressMap.get(this.clearedBreakPoints[i].line);
+			if (lineAddress) {
+				this.setAtariWord(payload,index, lineAddress+1);
+				this.setAtariWord(payload,index+2, this._debugCheckAddress);
+				validBreakpointCount++;
+				index+=4;
+			}
+		}
+
+		// Add breakpoints
+		for (let i=0;i<bps.length;i++) {
+			let lineAddress = this._lineToAddressMap.get(bps[i].line);
+			if (lineAddress) {
+				this.setAtariWord(payload,index, lineAddress+1);
+				this.setAtariWord(payload,index+2, this._debugBreakAddress);
+				validBreakpointCount++;
+				index+=4;
+			}
+		}
+
+		// Empty the list of cleared, now that the program will have the latest results.
+		this.clearedBreakPoints = [];
+		
+		// Set the number of [word:location][word:value] pairs that were added added
+		this.setAtariWord(payload,4,  validBreakpointCount);
+
+		// Send any variables to update in form of [word:location][word:length][data]		
 		this.variables.forEach(v => {
 			if (v.memLoc && v.modified) {
 				v.modified = false;

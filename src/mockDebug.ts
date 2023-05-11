@@ -27,26 +27,41 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 
 const DEBUGGER_STUB = `
-DIM ___DEBUG_MODE, ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_BREAK_NEXT
-DIM ___DEBUG_BP(128)
-PROC ___DEBUG_CB ___DEBUG_LINE
-  IF NOT ___DEBUG_BREAK_NEXT
-    FOR ___DEBUG_I = 1 TO ___DEBUG_BP(0)
-      IF ___DEBUG_LINE = ___DEBUG_BP(___DEBUG_I) THEN EXIT
-    NEXT
-    IF ___DEBUG_I > ___DEBUG_BP(0) THEN EXIT
-  ENDIF
-  '? "[STOPPED @ "; ___DEBUG_LINE; "]"
-  @___DEBUG_DUMP
-  @___DEBUG_POLL
+DIM ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_LINE
+IF &___DEBUG_I = 0 THEN @___DEBUG_BREAK
+
+' Short Assembly routine to retrieve the current stack pointer
+' Copies Stack Register to X register, which is returned to FastBasic
+DATA ___DEBUG_GETSTACK() byte= $BA, $60
+
+' Called before every line when a breakpoint is not set, to check if stepping. 
+' Normally returns right away, except when stepping through the code
+PROC ___DEBUG_CHECK
+	INC ___DEBUG_I
+	' The above "INC/TOK_INCVAR/$3A" byte code gets replaced with "EXIT/TOK_CNRET/$5C" when not stepping through code
+
+	' Retrieve address of current line from 6502 stack
+	___DEBUG_I = usr(&___DEBUG_GETSTACK)
+	___DEBUG_LINE=dpeek($103+peek(&___DEBUG_I+1))
+	@___DEBUG_BREAK
 ENDPROC
 
-PROC ___DEBUG_DUMP
+' Called before any line set as a breakpoint, or by ___DEBUG_CHECK when stepping through
+PROC ___DEBUG_BREAK
+	IF ___DEBUG_LINE=0
+		' Retrieve address of current line from 6502 stack
+		___DEBUG_I = usr(&___DEBUG_GETSTACK)
+		___DEBUG_LINE=dpeek($103+peek(&___DEBUG_I+1))
+	ENDIF
+
+	'PRINT ___DEBUG_LINE
   close #5:open #5,4,0,"H4:debug.mem"
   if err()<>1 THEN EXIT 
   close #4:open #4,8,0,"H4:debug.out"
   put #4, 1 ' Variable memory dump
   bput #4, &___DEBUG_LINE, 2
+	
+	___DEBUG_LINE=0 ' Clear debug line so we can check it the next time
   ___DEBUG_I=0
   do
     ' Retrieve next memory location and length to write out
@@ -89,6 +104,7 @@ PROC ___DEBUG_DUMP
   close #4
   close #5
   XIO #5, 33, 0, 0, "H4:debug.in"
+	@___DEBUG_POLL
 ENDPROC
 
 PROC ___DEBUG_POLL
@@ -105,20 +121,22 @@ PROC ___DEBUG_POLL
 
   close #5:open #5,4,0,"H4:debug.in"
   if err()=1 
-    get #5,___DEBUG_MODE
-  '  ? "[DEBUG MODE ";___DEBUG_MODE;"]"
-    if ___DEBUG_MODE=0 or err()<>1 then exit
+    get #5,___DEBUG_I
+    if ___DEBUG_I=0 or err()<>1 then exit
 
-    if ___DEBUG_MODE=1        ' Continue (to next breakpoint)
-      ___DEBUG_BREAK_NEXT=0
-    elif ___DEBUG_MODE=2      ' Step forward to next line
-      ___DEBUG_BREAK_NEXT=1
-    endif
+		' Update debug step/continue memory loc
+		bget #5,&___DEBUG_MEM,2
+		get #5, ___DEBUG_I
+		'? "Poking "; ___DEBUG_MEM; " from "; peek(___DEBUG_MEM); " to ";___DEBUG_I
+		poke ___DEBUG_MEM, ___DEBUG_I
  
-    ' Populate Breakpoint list received from debugger, then continue execution
-    get #5, ___DEBUG_BP(0)
-    bget #5,&___DEBUG_BP+2,___DEBUG_BP(0)*2
-    
+    ' Loop through location/value updates (Breakpoint for now)
+    bget #5,&___DEBUG_LEN,2
+		FOR ___DEBUG_I = 1 TO ___DEBUG_LEN
+			bget #5,&___DEBUG_MEM,2
+			bget #5,___DEBUG_MEM,2
+		NEXT
+
     ' Update any variable memory from debugger
     do    
       ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
@@ -139,6 +157,8 @@ PROC  ___DEBUG_END
  XIO #5, 33, 0, 0, "H4:debug.in"
  get ___DEBUG_I
 ENDPROC
+
+@___DEBUG_END
 `;
 /**
  * This interface describes the fastbasic-debugger specific launch attributes
@@ -396,8 +416,10 @@ export class MockDebugSession extends LoggingDebugSession {
 		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder + folderDelimiter + filename));
 
 		// Inject debugger code into the bin source file copy
-		let lineCount = await this.injectDebuggerCode(binFolder + folderDelimiter + filename);
-
+		const breakpoints = this._runtime.breakPoints.get(this.normalizePathAndCasing(file)) ?? new Array<IRuntimeBreakpoint>();
+	
+		let lineCount = await this.injectDebuggerCode(binFolder + folderDelimiter + filename, breakpoints);
+		
 		// Check if the compiler exists
 		if (!await this._fileAccessor.doesFileExist(args.compilerPath)) {
 			response.success = false;
@@ -455,7 +477,7 @@ export class MockDebugSession extends LoggingDebugSession {
 				e.body.column = Number(column); // this.convertDebuggerColumnToClient(column);
 				this.sendEvent(e);
 				*/
-				this.sendEvent(new ExitedEvent(0));
+			//	this.sendEvent(new ExitedEvent(0));
 				this.sendEvent(new TerminatedEvent());
 			}
 		});
@@ -470,7 +492,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		if (! await this._fileAccessor.doesFileExist(atariExecutable)) {
 			if (!wroteError) {
-			//	fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
+			fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
 			}
 			//response.success = false;
 			this.sendEvent(new TerminatedEvent());
@@ -488,45 +510,60 @@ export class MockDebugSession extends LoggingDebugSession {
 			return undefined;
 		}
 
+		// Don't bother starting debugging if there are no breakpoints
+		if (breakpoints.length === 0) {
+			// Run the program in the emulator
+			cp.execFile(`${args.emulatorPath}`,["/singleinstance","/run", atariExecutable ], (err, stdout) => {
+				if (err) {
+					fastBasicChannel.appendLine(err.message);
+				}
+				fastBasicChannel.appendLine(stdout);
+			});
+		 this.sendEvent(new TerminatedEvent());
+		 return undefined;
+		}
 		// start the program in the runtime
 		await this._runtime.start(file, !!args.stopOnEntry, !args.noDebug, args.emulatorPath, atariExecutable);
 		this.sendResponse(response);
 	}
 
-	private async injectDebuggerCode(file: string): Promise<number> {
+	private async injectDebuggerCode(file: string, breakpoints: IRuntimeBreakpoint[]): Promise<number> {
 		let sourceLines = new TextDecoder().decode(await this._fileAccessor.readFile(file)).split(/\r?\n/);
 		let lineCount = sourceLines.length;
-		sourceLines[0] = "@___DEBUG_POLL:@___DEBUG_CB 1:" + sourceLines[0];
-		let i = 0;
-		let alreadyIncludesDebugger = false;
-		for (i = 1; i < sourceLines.length; i++) {
-			// Exit if reaching end (to allow testing debug code post end)
-			if (sourceLines[i] === "'___PROGRAM_END___") {
-				alreadyIncludesDebugger = true;
-				break;
-			}
-			let line = sourceLines[i].trim().toLocaleLowerCase();
 
-			if (line.length > 0
-				&& !line.startsWith("'")
-				&& !line.startsWith(".")
-				&& !line.startsWith("data ")
-				&& !line.startsWith("da.")
-				&& !line.startsWith("proc ")
-				&& !line.startsWith("pr.")
-				&& !line.startsWith("endproc")
-				&& !line.startsWith("endp.")
-			) {
-				sourceLines[i] = `@___DEBUG_CB ${i + 1}:${sourceLines[i]}`;
-			}
+		// Only inject debugging code if at least one breakpoint is set
+	   let i =  sourceLines.length;
 
-		}
-		// Don't end program until key press in debug mode
-		sourceLines.splice(i, 0, "@___DEBUG_END");
-		if (!alreadyIncludesDebugger) {
+		if (breakpoints.length > 0) {
+			
+			sourceLines[0] = "@___DEBUG_POLL:" + sourceLines[0];
+		
+			for (i = 1; i < sourceLines.length; i++) {
+
+				let line = sourceLines[i].trim().toLocaleLowerCase();
+
+				if (line.length > 0
+					&& !line.startsWith("'")
+					&& !line.startsWith(".")
+					&& !line.startsWith("data ")
+					&& !line.startsWith("da.")
+					&& !line.startsWith("proc ")
+					&& !line.startsWith("pr.")
+					&& !line.startsWith("endproc")
+					&& !line.startsWith("endp.")
+				) {
+					sourceLines[i] = `@___DEBUG_CHECK:${sourceLines[i]}`;
+				}
+			}
+			
+			// Append the debugger code at the end of the listing
 			sourceLines = sourceLines.concat(DEBUGGER_STUB.split("\n"));
+	
+		} else {
+			// Don't end program until key press in debug mode (even when no breakpoints are added)
+			sourceLines.splice(i, 0, "GET ___DEBUG_KEY");
 		}
-
+		
 		// Save the new code
 		this._fileAccessor.writeFile(file, new TextEncoder().encode(sourceLines.join("\n")));
 		return lineCount;
@@ -940,8 +977,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			?? this._runtime.getLocalVariable(name + "$") 
 			?? this._runtime.getLocalVariable(name + "%");
 	  
-			
-
 		if (rv) {
 			const v = this.convertFromRuntime(rv);
 			
@@ -976,6 +1011,14 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private createSource(filePath: string): Source {
 		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
+	}
+
+	private normalizePathAndCasing(path: string) {
+		if ('win32' === process.platform) {
+			return path.replace(/\//g, '\\').toLowerCase();
+		} else {
+			return path.replace(/\\/g, '/');
+		}
 	}
 }
 

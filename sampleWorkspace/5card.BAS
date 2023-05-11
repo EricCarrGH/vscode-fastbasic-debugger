@@ -425,7 +425,7 @@ ENDPROC
 ' an existing card in a few supported cases.
 
 PROC DrawCard text _col _row
-  loc = screen + 40*_row +_col
+  loc = screen + 40* _row +_col
   topBottomOffset=0
   
   ' Get character index based on value of card
