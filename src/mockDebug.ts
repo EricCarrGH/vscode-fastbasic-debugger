@@ -21,39 +21,28 @@ import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
 import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, IRuntimeVariableType } from './mockRuntime';
 import { Subject } from 'await-notify';
-import * as base64 from 'base64-js';
 import { fastBasicChannel } from './activateMockDebug';
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 
 const DEBUGGER_STUB = `
 DIM ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_LINE
-IF &___DEBUG_I = 0 THEN @___DEBUG_BREAK
+'INC ___DEBUG_I:IF &___DEBUG_I = 0 THEN @___DEBUG_BREAK
+
+PROC ___DEBUG_NOP:ENDPROC
 
 ' Short Assembly routine to retrieve the current stack pointer
 ' Copies Stack Register to X register, which is returned to FastBasic
-DATA ___DEBUG_GETSTACK() byte= $BA, $60
-
-' Called before every line when a breakpoint is not set, to check if stepping. 
-' Normally returns right away, except when stepping through the code
-PROC ___DEBUG_CHECK
-	INC ___DEBUG_I
-	' The above "INC/TOK_INCVAR/$3A" byte code gets replaced with "EXIT/TOK_CNRET/$5C" when not stepping through code
-
-	' Retrieve address of current line from 6502 stack
-	___DEBUG_I = usr(&___DEBUG_GETSTACK)
-	___DEBUG_LINE=dpeek($103+peek(&___DEBUG_I+1))
-	@___DEBUG_BREAK
-ENDPROC
+'DATA ___DEBUG_GETSTACK() byte= $BA, $60 ' not working in larger programs
 
 ' Called before any line set as a breakpoint, or by ___DEBUG_CHECK when stepping through
 PROC ___DEBUG_BREAK
-	IF ___DEBUG_LINE=0
+	IF ___DEBUG_LINE = 0
 		' Retrieve address of current line from 6502 stack
-		___DEBUG_I = usr(&___DEBUG_GETSTACK)
+		___DEBUG_LINE = $60BA ' $BA. $60 assembly line call
+		___DEBUG_I = usr(&___DEBUG_LINE)
 		___DEBUG_LINE=dpeek($103+peek(&___DEBUG_I+1))
 	ENDIF
-
 	'PRINT ___DEBUG_LINE
   close #5:open #5,4,0,"H4:debug.mem"
   if err()<>1 THEN EXIT 
@@ -64,14 +53,15 @@ PROC ___DEBUG_BREAK
 	___DEBUG_LINE=0 ' Clear debug line so we can check it the next time
   ___DEBUG_I=0
   do
-    ' Retrieve next memory location and length to write out
-    ___DEBUG_MEM = -1:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = -1 then exit
+    ' Retrieve the next ___DEBUG_MEM, ___DEBUG_LEN combination (memory location and length to write out)
+    ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
     
     ' The first mem/size block is for variables, so we dump the contents of MEM.
     ' All subsequent blocks are for array/string regions, so we 
     ' need to dump the contents that MEM *POINTS TO*, and send that new location to the debugger
     if ___DEBUG_I
-      IF ___DEBUG_MEM>0 THEN ___DEBUG_MEM = dpeek(___DEBUG_MEM)
+      'IF ___DEBUG_MEM>0 THEN 
+			___DEBUG_MEM = dpeek(___DEBUG_MEM)
        bput #4, &___DEBUG_MEM, 2
     endif
 
@@ -85,9 +75,9 @@ PROC ___DEBUG_BREAK
 					
           bput #4, ___DEBUG_MEM, 2
           bput #4, dpeek(___DEBUG_MEM), 256
-          IF ___DEBUG_MEM>0
+          'IF ___DEBUG_MEM>0
             inc ___DEBUG_MEM: inc ___DEBUG_MEM
-          ENDIF
+          'ENDIF
           ___DEBUG_LEN=___DEBUG_LEN-256
       wend
     else
@@ -118,19 +108,20 @@ PROC ___DEBUG_POLL
     close #5
     pause 10
   loop
-
+  
   close #5:open #5,4,0,"H4:debug.in"
   if err()=1 
     get #5,___DEBUG_I
     if ___DEBUG_I=0 or err()<>1 then exit
 
 		' Update debug step/continue memory loc
-		bget #5,&___DEBUG_MEM,2
-		get #5, ___DEBUG_I
+		'bget #5,&___DEBUG_MEM,2
+		'get #5, ___DEBUG_I
 		'? "Poking "; ___DEBUG_MEM; " from "; peek(___DEBUG_MEM); " to ";___DEBUG_I
-		poke ___DEBUG_MEM, ___DEBUG_I
+	'	get k
+		'poke ___DEBUG_MEM, ___DEBUG_I
  
-    ' Loop through location/value updates (Breakpoint for now)
+    ' Loop through location/value updates (CHECK and Breakpoint)
     bget #5,&___DEBUG_LEN,2
 		FOR ___DEBUG_I = 1 TO ___DEBUG_LEN
 			bget #5,&___DEBUG_MEM,2
@@ -146,16 +137,33 @@ PROC ___DEBUG_POLL
     close #5
   endif
 
+	@___DEBUG_NOP
   ' Continue execution
   ' ? "[CONTINUE]"
 ENDPROC
 
-PROC  ___DEBUG_END
+PROC ___DEBUG_END
  close #4:open #4,8,0,"H4:debug.out"
  put #4, 9 ' End
  close #4
  XIO #5, 33, 0, 0, "H4:debug.in"
+ @___DEBUG_NOP
+ IF &___DEBUG_I = 0 THEN @___DEBUG_BREAK
  get ___DEBUG_I
+ENDPROC
+
+PROC ___DEBUG_STEP
+		' Retrieve address of current line from 6502 stack
+		___DEBUG_LINE = $60BA ' $BA. $60 assembly line call
+		___DEBUG_I = usr(&___DEBUG_LINE)
+		___DEBUG_LINE=dpeek($105+peek(&___DEBUG_I+1))
+		@___DEBUG_BREAK
+ENDPROC
+
+' Called before every line when a breakpoint is not set, to check if stepping. 
+' Normally returns right away, except when stepping through the code
+PROC ___DEBUG_CHECK
+	@___DEBUG_NOP
 ENDPROC
 
 @___DEBUG_END
@@ -437,7 +445,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		//this.sendEvent(new OutputEvent(`Compiling ${filename} using FastBasic Compiler..\n`, "stdio"));
 
 		let wroteError = false;
-		cp.execFile(`${args.compilerPath}`, [filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
+		cp.execFile(`${args.compilerPath}`, ["-n",filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
 			if (err) {
 
 				// Strip the first two lines as they do not add value, unless they are unexpected

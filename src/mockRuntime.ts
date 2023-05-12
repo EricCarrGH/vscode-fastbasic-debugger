@@ -151,6 +151,11 @@ export class MockRuntime extends EventEmitter {
 	private _lineToAddressMap = new Map<number, number>();
   private _debugCheckAddress: number = 0;
 	private _debugBreakAddress: number = 0;
+	private _debugNopAddress: number = 0;
+	private _debugStepAddress: number = 0;
+	//private TOK_RET : number = 0;
+	//private TOK_INCVAR : number = 0 ;
+
 	
 	constructor(private fileAccessor: FileAccessor) {
 		super();
@@ -409,11 +414,13 @@ export class MockRuntime extends EventEmitter {
 				
 				for (let j = 2; j < listLines.length; j++) {
 					if (listLines[j].endsWith(makeVar) && listLines[j-1].endsWith("TOK_DIM")) {
-						let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 3 : 2)].split("\t").slice(-1)[0]);
+						// Optimized compile: let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 3 : 2)].split("\t").slice(-1)[0]);
+						let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 5 : 5)].split("\t").slice(-1)[0])+1;
 						
+						/* Optimized compile
 						if (varType === VAR_WORD || varType === VAR_STRING) {
 							arraySize /= 2;
-						} 
+						} */
 
 						byteLen *= arraySize;
 
@@ -456,24 +463,45 @@ export class MockRuntime extends EventEmitter {
 			let parts = labelLines[i].split('.');
 		
 			if (parts.length>1) {
-				if (parts[1]==="fb_lbl____DEBUG_CHECK") {
-					// Get the memory location of debug_check proc, to:
-					// 1. Toggle stepping through code at the start of the proc
-					// 2. Set lines to call it when they don't have a breakpoint set
-					this._debugCheckAddress =  parseInt(parts[0].substring(5).trim(), 16);
-				} else if (parts[1]==="fb_lbl____DEBUG_BREAK") {
-					// Get the memory location of the debug_break proc, to:
-					// 1. Set lines to call it when they have a breakpoint set
+
+				// Get the values of a few TOK_ commands we use
+				/*if (parts[1]==="TOK_RET") {
+					this.TOK_RET =  parseInt(parts[0].substring(7).trim(), 16);
+				} else if (parts[1]==="TOK_INCVAR") {
+					this.TOK_INCVAR =  parseInt(parts[0].substring(7).trim(), 16);
+				} */
+
+				// Get the memory location of debug_check proc, to:
+				// 1. Toggle stepping through code at the start of the proc
+				// 2. Set lines to call it when they don't have a breakpoint set
+			  if (parts[1]==="fb_lbl____DEBUG_CHECK") {
+						this._debugCheckAddress =  parseInt(parts[0].substring(5).trim(), 16);
+				} 
+				else if (parts[1]==="fb_lbl____DEBUG_STEP") {
+					this._debugStepAddress =  parseInt(parts[0].substring(5).trim(), 16);
+				} 
+				else if (parts[1]==="fb_lbl____DEBUG_NOP") {
+					this._debugNopAddress =  parseInt(parts[0].substring(5).trim(), 16);
+				} 
+
+				// Get the memory location of the debug_break proc, to:
+				// 1. Set lines to call it when they have a breakpoint set
+				else if (parts[1]==="fb_lbl____DEBUG_BREAK") {
 					this._debugBreakAddress =  parseInt(parts[0].substring(5).trim(), 16);
-				} else if (parts[1].startsWith("@FastBasic_LINE_")) {
-					// Get the memory location of each line in memory, to:
-					// 1. Determine which line the program stopped at
-					// 2. Set/clear breakpoints on line
+				} 
+
+				// Get the memory location of each line in memory, to:
+				// 1. Determine which line the program stopped at
+				// 2. Set/clear breakpoints on line
+				else if (parts[1].startsWith("@FastBasic_LINE_")) {
 					let line = parseInt(parts[1].slice(16).split('_')[0]);
 					if (line<= listLines.length) {
 						let memLoc = parseInt(parts[0].substring(5).trim(), 16);
-						this._addressToLineMap.set(memLoc, line);//remove the +1 later
-						this._lineToAddressMap.set(line, memLoc);
+						var existingLine =  Number(this._addressToLineMap.get(memLoc) ?? 0);
+						if (existingLine<line) {
+							this._addressToLineMap.set(memLoc, line);//remove the +1 later
+							this._lineToAddressMap.set(line, memLoc);
+						}
 					}
 				} else if (parts[1].startsWith("fb_var_")) {
 					let name = parts[1].substring(7);
@@ -489,6 +517,28 @@ export class MockRuntime extends EventEmitter {
 					}	
 				}
 			}		
+		}
+
+		// Confirm we found all locations
+		if (this._debugStepAddress===0) {
+			fastBasicChannel.appendLine(`fb_lbl____DEBUG_STEP not found. Aborting!`);
+			this.sendEvent('end');
+			return;
+		}
+		if (this._debugCheckAddress===0) {
+			fastBasicChannel.appendLine(`fb_lbl____DEBUG_CHECK not found. Aborting!`);
+			this.sendEvent('end');
+			return;
+		}
+		if (this._debugNopAddress===0) {
+			fastBasicChannel.appendLine(`fb_lbl____DEBUG_NOP not found. Aborting!`);
+			this.sendEvent('end');
+			return;
+		}
+		if (this._debugBreakAddress===0) {
+			fastBasicChannel.appendLine(`fb_lbl____DEBUG_BREAK not found. Aborting!`);
+			this.sendEvent('end');
+			return;
 		}
 
 		// Construct memory dump payload request
@@ -509,6 +559,8 @@ export class MockRuntime extends EventEmitter {
 			}
 		});
 		
+		requestMemoryDump = requestMemoryDump.slice(0,memDumpIndex);
+
 		// Write memory dump file
 		await this.fileAccessor.writeFile(this._debugMemFile, requestMemoryDump);
 	}
@@ -618,9 +670,9 @@ export class MockRuntime extends EventEmitter {
 	
 		/* Payload format:
 		0 [byte] Message/command (1 for now)
-		1 [word] Step/Continue memory location (currently debug check address)
-		3 [byte] Step/Continue value
-		4 [word] Location/Value pair count (currenly used to set/clear breakpoints)
+		//1 [word] Step/Continue memory location (currently debug check address)
+		//3 [byte] Step/Continue value
+		4 [word] Location/Value pair count (used for check proc dest and set/clear breakpoints)
 			[word:location][word:value] pairs
 		  [word:location][word:length][data] sets
 		*/
@@ -628,11 +680,16 @@ export class MockRuntime extends EventEmitter {
 		payload[0] = 1;// 1 for now. May extend later
 
 		// Set the appropriate memory location for stepping:
-		this.setAtariWord(payload, 1, this._debugCheckAddress);
-		payload[3] = command === MessageCommand.StepNext ? 0x3A : 0x5C;
+		//this.setAtariWord(payload, 1, this._debugCheckAddress);
+		//payload[3] = command === MessageCommand.StepNext ? this.TOK_INCVAR : this.TOK_RET;
+		let index = 3;
+		let locValCount = 0;
+
+		this.setAtariWord(payload,index, this._debugCheckAddress+1);
+		this.setAtariWord(payload,index+2, command === MessageCommand.StepNext ? this._debugStepAddress : this._debugNopAddress);
+		index+=4; locValCount++;
 		
-		let index = 6;
-		let validBreakpointCount = 0;
+		
 
 		// Clear breakpoints
 		for (let i=0;i<this.clearedBreakPoints.length;i++) {
@@ -640,7 +697,7 @@ export class MockRuntime extends EventEmitter {
 			if (lineAddress) {
 				this.setAtariWord(payload,index, lineAddress+1);
 				this.setAtariWord(payload,index+2, this._debugCheckAddress);
-				validBreakpointCount++;
+				locValCount++;
 				index+=4;
 			}
 		}
@@ -651,7 +708,7 @@ export class MockRuntime extends EventEmitter {
 			if (lineAddress) {
 				this.setAtariWord(payload,index, lineAddress+1);
 				this.setAtariWord(payload,index+2, this._debugBreakAddress);
-				validBreakpointCount++;
+				locValCount++;
 				index+=4;
 			}
 		}
@@ -660,7 +717,7 @@ export class MockRuntime extends EventEmitter {
 		this.clearedBreakPoints = [];
 		
 		// Set the number of [word:location][word:value] pairs that were added added
-		this.setAtariWord(payload,4,  validBreakpointCount);
+		this.setAtariWord(payload,1, locValCount);
 
 		// Send any variables to update in form of [word:location][word:length][data]		
 		this.variables.forEach(v => {
