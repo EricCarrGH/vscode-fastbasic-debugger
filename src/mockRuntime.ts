@@ -152,10 +152,6 @@ export class MockRuntime extends EventEmitter {
   private _debugCheckAddress: number = 0;
 	private _debugBreakAddress: number = 0;
 	private _debugNopAddress: number = 0;
-	private _debugStepAddress: number = 0;
-	//private TOK_RET : number = 0;
-	//private TOK_INCVAR : number = 0 ;
-
 	
 	constructor(private fileAccessor: FileAccessor) {
 		super();
@@ -414,13 +410,14 @@ export class MockRuntime extends EventEmitter {
 				
 				for (let j = 2; j < listLines.length; j++) {
 					if (listLines[j].endsWith(makeVar) && listLines[j-1].endsWith("TOK_DIM")) {
-						// Optimized compile: let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 3 : 2)].split("\t").slice(-1)[0]);
-						let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 5 : 5)].split("\t").slice(-1)[0])+1;
+						//Optimized compile: 
+						let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 3 : 2)].split("\t").slice(-1)[0]);
+					  //let arraySize = parseInt(listLines[j-(varType === VAR_FLOAT ? 5 : 5)].split("\t").slice(-1)[0])+1;
 						
-						/* Optimized compile
+						/* Optimized compile*/
 						if (varType === VAR_WORD || varType === VAR_STRING) {
 							arraySize /= 2;
-						} */
+						}
 
 						byteLen *= arraySize;
 
@@ -477,9 +474,6 @@ export class MockRuntime extends EventEmitter {
 			  if (parts[1]==="fb_lbl____DEBUG_CHECK") {
 						this._debugCheckAddress =  parseInt(parts[0].substring(5).trim(), 16);
 				} 
-				else if (parts[1]==="fb_lbl____DEBUG_STEP") {
-					this._debugStepAddress =  parseInt(parts[0].substring(5).trim(), 16);
-				} 
 				else if (parts[1]==="fb_lbl____DEBUG_NOP") {
 					this._debugNopAddress =  parseInt(parts[0].substring(5).trim(), 16);
 				} 
@@ -520,11 +514,6 @@ export class MockRuntime extends EventEmitter {
 		}
 
 		// Confirm we found all locations
-		if (this._debugStepAddress===0) {
-			fastBasicChannel.appendLine(`fb_lbl____DEBUG_STEP not found. Aborting!`);
-			this.sendEvent('end');
-			return;
-		}
 		if (this._debugCheckAddress===0) {
 			fastBasicChannel.appendLine(`fb_lbl____DEBUG_CHECK not found. Aborting!`);
 			this.sendEvent('end');
@@ -686,7 +675,7 @@ export class MockRuntime extends EventEmitter {
 		let locValCount = 0;
 
 		this.setAtariWord(payload,index, this._debugCheckAddress+1);
-		this.setAtariWord(payload,index+2, command === MessageCommand.StepNext ? this._debugStepAddress : this._debugNopAddress);
+		this.setAtariWord(payload,index+2, command === MessageCommand.StepNext ? this._debugBreakAddress : this._debugNopAddress);
 		index+=4; locValCount++;
 		
 		

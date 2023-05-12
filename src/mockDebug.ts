@@ -27,22 +27,25 @@ import * as cp from 'child_process';
 
 const DEBUGGER_STUB = `
 DIM ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_LINE
-'INC ___DEBUG_I:IF &___DEBUG_I = 0 THEN @___DEBUG_BREAK
-
-PROC ___DEBUG_NOP:ENDPROC
-
-' Short Assembly routine to retrieve the current stack pointer
-' Copies Stack Register to X register, which is returned to FastBasic
-'DATA ___DEBUG_GETSTACK() byte= $BA, $60 ' not working in larger programs
+ 
+' "No Op" proc called by "check" when not stepping through code
+' This will be replaced with the address of the BREAK when stepping
+PROC ___DEBUG_NOP
+	' Include a statement to prevent FastBasic optimizer from removing this proc's label
+	INC ___DEBUG_I 
+ENDPROC
 
 ' Called before any line set as a breakpoint, or by ___DEBUG_CHECK when stepping through
 PROC ___DEBUG_BREAK
-	IF ___DEBUG_LINE = 0
-		' Retrieve address of current line from 6502 stack
-		___DEBUG_LINE = $60BA ' $BA. $60 assembly line call
-		___DEBUG_I = usr(&___DEBUG_LINE)
-		___DEBUG_LINE=dpeek($103+peek(&___DEBUG_I+1))
-	ENDIF
+
+	' Short Assembly routine ($BA, $60) to retrieve the current stack pointer
+	' Copies Stack Register to X register, which is returned to FastBasic
+	___DEBUG_I = $60BA
+	___DEBUG_I = usr(&___DEBUG_I)
+
+	' Retrieve address of current line from 6502 stack ($100 + stack pointer + 3)
+	___DEBUG_LINE=dpeek($103+peek(&___DEBUG_I+1))
+
 	'PRINT ___DEBUG_LINE
   close #5:open #5,4,0,"H4:debug.mem"
   if err()<>1 THEN EXIT 
@@ -50,7 +53,6 @@ PROC ___DEBUG_BREAK
   put #4, 1 ' Variable memory dump
   bput #4, &___DEBUG_LINE, 2
 	
-	___DEBUG_LINE=0 ' Clear debug line so we can check it the next time
   ___DEBUG_I=0
   do
     ' Retrieve the next ___DEBUG_MEM, ___DEBUG_LEN combination (memory location and length to write out)
@@ -60,7 +62,6 @@ PROC ___DEBUG_BREAK
     ' All subsequent blocks are for array/string regions, so we 
     ' need to dump the contents that MEM *POINTS TO*, and send that new location to the debugger
     if ___DEBUG_I
-      'IF ___DEBUG_MEM>0 THEN 
 			___DEBUG_MEM = dpeek(___DEBUG_MEM)
        bput #4, &___DEBUG_MEM, 2
     endif
@@ -68,6 +69,7 @@ PROC ___DEBUG_BREAK
     INC ___DEBUG_I
 
     ' String array points to a second array that points to each string
+		' TODO - support non strings with a len of 256!
     if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
       while ___DEBUG_LEN>0
           
@@ -75,9 +77,8 @@ PROC ___DEBUG_BREAK
 					
           bput #4, ___DEBUG_MEM, 2
           bput #4, dpeek(___DEBUG_MEM), 256
-          'IF ___DEBUG_MEM>0
-            inc ___DEBUG_MEM: inc ___DEBUG_MEM
-          'ENDIF
+					inc ___DEBUG_MEM: inc ___DEBUG_MEM
+
           ___DEBUG_LEN=___DEBUG_LEN-256
       wend
     else
@@ -137,7 +138,9 @@ PROC ___DEBUG_POLL
     close #5
   endif
 
-	@___DEBUG_NOP
+	' Reference ___DEBUG_BREAK so FastBasic optimizer will keep it
+	IF &___DEBUG_LINE = 0 THEN @___DEBUG_BREAK
+
   ' Continue execution
   ' ? "[CONTINUE]"
 ENDPROC
@@ -147,17 +150,7 @@ PROC ___DEBUG_END
  put #4, 9 ' End
  close #4
  XIO #5, 33, 0, 0, "H4:debug.in"
- @___DEBUG_NOP
- IF &___DEBUG_I = 0 THEN @___DEBUG_BREAK
  get ___DEBUG_I
-ENDPROC
-
-PROC ___DEBUG_STEP
-		' Retrieve address of current line from 6502 stack
-		___DEBUG_LINE = $60BA ' $BA. $60 assembly line call
-		___DEBUG_I = usr(&___DEBUG_LINE)
-		___DEBUG_LINE=dpeek($105+peek(&___DEBUG_I+1))
-		@___DEBUG_BREAK
 ENDPROC
 
 ' Called before every line when a breakpoint is not set, to check if stepping. 
@@ -445,7 +438,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		//this.sendEvent(new OutputEvent(`Compiling ${filename} using FastBasic Compiler..\n`, "stdio"));
 
 		let wroteError = false;
-		cp.execFile(`${args.compilerPath}`, ["-n",filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
+		//cp.execFile(`${args.compilerPath}`, ["-n",filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
+			cp.execFile(`${args.compilerPath}`, [filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
 			if (err) {
 
 				// Strip the first two lines as they do not add value, unless they are unexpected
