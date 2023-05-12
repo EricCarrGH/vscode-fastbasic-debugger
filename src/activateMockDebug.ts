@@ -48,7 +48,6 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 					name: 'Debug File',
 					request: 'launch',
 					sourceFile: targetResource.fsPath,
-					stopOnEntry: true,
           compilerPath: "E.G. c:/fastbasic/fastbasic.exe",
           emulatorPath: "E.G. c:/atari/Altirra/Altirra64.exe"
 				});

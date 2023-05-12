@@ -62,11 +62,6 @@ export class RuntimeVariable {
 	constructor(public readonly name: string, private _value: IRuntimeVariableType, public readonly type: string, public readonly byteLen: number) {}
 }
 
-interface Word {
-	name: string;
-	line: number;
-	index: number;
-}
 
 export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
@@ -157,7 +152,7 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, stopOnEntry: boolean, debug: boolean, emulatorPath: string, executable: string): Promise<void> {
+	public async start(program: string, debug: boolean, emulatorPath: string, executable: string): Promise<void> {
  
 		fastBasicChannel.appendLine(`Compiled successfully - running in emulator..`);
 
@@ -168,11 +163,6 @@ export class MockRuntime extends EventEmitter {
 			// Send initial message to start communication with the program before launching it
 			await this.sendMessageToProgram(MessageCommand.continue);
 		}
-
-			// send 'stopped' event
-		//	this.findNextStatement(false, 'stopOnEntry');
-			//return;
-			//this.sendEvent('stopOnBreakpoint');
 
 		// Run the program in the emulator
 		cp.execFile(`${emulatorPath}`,["/singleinstance","/run", executable ], (err, stdout) => {

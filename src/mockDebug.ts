@@ -170,8 +170,6 @@ ENDPROC
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	/** An absolute path to the "program" to debug. */
 	sourceFile: string;
-	/** Automatically stop target after launch. If not specified, target does not stop. */
-	stopOnEntry?: boolean;
 	/** enable logging the Debug Adapter Protocol */
 	trace?: boolean;
 	/** run without debugging */
@@ -281,29 +279,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	
 		// make VS Code send the breakpointLocations request
 		response.body.supportsBreakpointLocationsRequest = true;
-
-		// the adapter defines two exceptions filters, one with support for conditions.
-		response.body.supportsExceptionFilterOptions = true;
-		response.body.exceptionBreakpointFilters = [
-			{
-				filter: 'namedException',
-				label: "Named Exception",
-				description: `Break on named exceptions. Enter the exception's name as the Condition.`,
-				default: false,
-				supportsCondition: true,
-				conditionDescription: `Enter the exception's name`
-			},
-			{
-				filter: 'otherExceptions',
-				label: "Other Exceptions",
-				description: 'This is a other exception',
-				default: true,
-				supportsCondition: false
-			}
-		];
-
-		// make VS Code send exceptionInfo request
-		response.body.supportsExceptionInfoRequest = true;
 
 		// make VS Code send setVariable request
 		response.body.supportsSetVariable = true;
@@ -485,7 +460,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		 return undefined;
 		}
 		// start the program in the runtime
-		await this._runtime.start(file, !!args.stopOnEntry, !args.noDebug, args.emulatorPath, atariExecutable);
+		await this._runtime.start(file, !args.noDebug, args.emulatorPath, atariExecutable);
 		this.sendResponse(response);
 	}
 
@@ -531,12 +506,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		return lineCount;
 	}
 
-
-
-	protected setFunctionBreakPointsRequest(response: DebugProtocol.SetFunctionBreakpointsResponse, args: DebugProtocol.SetFunctionBreakpointsArguments, request?: DebugProtocol.Request): void {
-		this.sendResponse(response);
-	}
-
 	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 
 		const path = args.source.path as string;
@@ -558,34 +527,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body = {
 			breakpoints: actualBreakpoints
 		};
-		this.sendResponse(response);
-	}
-
-
-	protected async setExceptionBreakPointsRequest(response: DebugProtocol.SetExceptionBreakpointsResponse, args: DebugProtocol.SetExceptionBreakpointsArguments): Promise<void> {
-
-		let namedException: string | undefined = undefined;
-		let otherExceptions = false;
-
-		if (args.filterOptions) {
-			for (const filterOption of args.filterOptions) {
-				switch (filterOption.filterId) {
-					case 'namedException':
-						namedException = args.filterOptions[0].condition;
-						break;
-					case 'otherExceptions':
-						otherExceptions = true;
-						break;
-				}
-			}
-		}
-
-		if (args.filters) {
-			if (args.filters.indexOf('otherExceptions') >= 0) {
-				otherExceptions = true;
-			}
-		}
-
 		this.sendResponse(response);
 	}
 
@@ -613,23 +554,9 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		response.body = {
 			stackFrames: stk.frames.map((f, ix) => {
-				const sf: DebugProtocol.StackFrame = new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line));
-				if (typeof f.column === 'number') {
-					sf.column = this.convertDebuggerColumnToClient(f.column);
-				}
-				if (typeof f.instruction === 'number') {
-					const address = "1234";//this.formatAddress(f.instruction);
-					sf.name = `${f.name} ${address}`;
-					sf.instructionPointerReference = address;
-				}
-
-				return sf;
+				return new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line));
 			}),
-			// 4 options for 'totalFrames':
-			//omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
-			totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
-			//totalFrames: 1000000 			// not the correct size, should result in a max. of two requests
-			//totalFrames: endFrame + 20 	// dynamically increases the size with every requested chunk, results in paging
+			totalFrames: stk.count			
 		};
 		this.sendResponse(response);
 	}
