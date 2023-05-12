@@ -82,8 +82,8 @@ const VAR_TYPE_LEN: Map<string, number> = new Map([
 ]);
 
 enum MessageCommand {
-	Continue = 1,
-	StepNext = 2
+	continue = 1,
+	stepNext = 2
 } 
 
 /**
@@ -169,7 +169,7 @@ export class MockRuntime extends EventEmitter {
 			// Load the source, which creates the memory dump file
 			await this.loadSource(program);
 			// Send initial message to start communication with the program before launching it
-			await this.sendMessageToProgram(MessageCommand.Continue);
+			await this.sendMessageToProgram(MessageCommand.continue);
 		}
 
 			// send 'stopped' event
@@ -194,7 +194,7 @@ export class MockRuntime extends EventEmitter {
 	 * Continue execution to the next breakpoint or end of program
 	 */
 	public async continue() {
-		await this.sendMessageToProgram(MessageCommand.Continue);
+		await this.sendMessageToProgram(MessageCommand.continue);
 		await this.waitOnProgram();
 	}
 
@@ -202,7 +202,7 @@ export class MockRuntime extends EventEmitter {
 	 * Step forward to the next line.
 	 */
 	public async step() {
-		await this.sendMessageToProgram(MessageCommand.StepNext);
+		await this.sendMessageToProgram(MessageCommand.stepNext);
 		await this.waitOnProgram();
 	}
 
@@ -461,13 +461,6 @@ export class MockRuntime extends EventEmitter {
 		
 			if (parts.length>1) {
 
-				// Get the values of a few TOK_ commands we use
-				/*if (parts[1]==="TOK_RET") {
-					this.TOK_RET =  parseInt(parts[0].substring(7).trim(), 16);
-				} else if (parts[1]==="TOK_INCVAR") {
-					this.TOK_INCVAR =  parseInt(parts[0].substring(7).trim(), 16);
-				} */
-
 				// Get the memory location of debug_check proc, to:
 				// 1. Toggle stepping through code at the start of the proc
 				// 2. Set lines to call it when they don't have a breakpoint set
@@ -652,7 +645,7 @@ export class MockRuntime extends EventEmitter {
 		
 		// If first line has a breakpoint set, and we are starting, change to step
 		if (this.currentLine<=1 && bps.find(o=> o.line === 1)) {
-			command = MessageCommand.StepNext;
+			command = MessageCommand.stepNext;
 		}
 
 		let payload = new Uint8Array(16000);
@@ -675,7 +668,7 @@ export class MockRuntime extends EventEmitter {
 		let locValCount = 0;
 
 		this.setAtariWord(payload,index, this._debugCheckAddress+1);
-		this.setAtariWord(payload,index+2, command === MessageCommand.StepNext ? this._debugBreakAddress : this._debugNopAddress);
+		this.setAtariWord(payload,index+2, command === MessageCommand.stepNext ? this._debugBreakAddress : this._debugNopAddress);
 		index+=4; locValCount++;
 		
 		
