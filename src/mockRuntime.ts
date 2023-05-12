@@ -139,9 +139,6 @@ export class MockRuntime extends EventEmitter {
 
 	private clearedBreakPoints = new Array<IRuntimeBreakpoint>();
 
-	// all instruction breakpoint addresses
-	private instructionBreakpoints = new Set<number>();
-
 	// since we want to send breakpoint events, we will assign an id to every event
 	// so that the frontend can match events with breakpoints.
 	private breakpointId = 1;
@@ -267,37 +264,6 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
-	public setDataBreakpoint(address: string, accessType: 'read' | 'write' | 'readWrite'): boolean {
-
-		const x = accessType === 'readWrite' ? 'read write' : accessType;
-
-		const t = this._breakAddresses.get(address);
-		if (t) {
-			if (t !== x) {
-				this._breakAddresses.set(address, 'read write');
-			}
-		} else {
-			this._breakAddresses.set(address, x);
-		}
-		return true;
-	}
-
-	public clearAllDataBreakpoints(): void {
-		this._breakAddresses.clear();
-	}
-
-	public setExceptionsFilters(namedException: string | undefined, otherExceptions: boolean): void {
-		
-	}
-
-	public setInstructionBreakpoint(address: number): boolean {
-		this.instructionBreakpoints.add(address);
-		return true;
-	}
-
-	public clearInstructionBreakpoints(): void {
-		this.instructionBreakpoints.clear();
-	}
 
 	public getLocalVariables(): RuntimeVariable[] {
 		return Array.from(this.variables, ([name, value]) => value);

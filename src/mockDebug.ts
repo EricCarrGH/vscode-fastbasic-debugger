@@ -228,19 +228,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('stopOnBreakpoint', () => {
 			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.threadID));
 		});
-		this._runtime.on('stopOnDataBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('data breakpoint', MockDebugSession.threadID));
-		});
-		this._runtime.on('stopOnInstructionBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('instruction breakpoint', MockDebugSession.threadID));
-		});
-		this._runtime.on('stopOnException', (exception) => {
-			if (exception) {
-				this.sendEvent(new StoppedEvent(`exception(${exception})`, MockDebugSession.threadID));
-			} else {
-				this.sendEvent(new StoppedEvent('exception', MockDebugSession.threadID));
-			}
-		});
 		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
 		});
@@ -291,21 +278,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// make VS Code use 'evaluate' when hovering over source
 		response.body.supportsEvaluateForHovers = true;
-
-		// make VS Code show a 'step back' button
-		response.body.supportsStepBack = false;
-
-
-		// make VS Code support data breakpoints
-		response.body.supportsDataBreakpoints = true;
-
-		// make VS Code support completion in REPL
-		response.body.supportsCompletionsRequest = true;
-		response.body.completionTriggerCharacters = [".", "["];
-
-		// make VS Code send cancel request
-		response.body.supportsCancelRequest = false;
-
+	
 		// make VS Code send the breakpointLocations request
 		response.body.supportsBreakpointLocationsRequest = true;
 
@@ -337,20 +310,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// make VS Code send setExpression request
 		response.body.supportsSetExpression = true;
-
-		// make VS Code send disassemble request
-		response.body.supportsDisassembleRequest = false;
-		response.body.supportsSteppingGranularity = false;
-		response.body.supportsInstructionBreakpoints = false;
-
-		// make VS Code able to read and write variable memory
-		response.body.supportsReadMemoryRequest = false;
-		response.body.supportsWriteMemoryRequest = false;
-
-		response.body.supportSuspendDebuggee = false;
-		response.body.supportTerminateDebuggee = false;
-		response.body.supportsFunctionBreakpoints = true;
-
+	
 		this.sendResponse(response);
 
 		// since this debug adapter can accept configuration requests like 'setBreakpoint' at any time,
@@ -626,8 +586,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			}
 		}
 
-		this._runtime.setExceptionsFilters(namedException, otherExceptions);
-
 		this.sendResponse(response);
 	}
 
@@ -782,110 +740,6 @@ export class MockDebugSession extends LoggingDebugSession {
 				showUser: true
 			});
 		}
-	}
-
-
-
-	protected dataBreakpointInfoRequest(response: DebugProtocol.DataBreakpointInfoResponse, args: DebugProtocol.DataBreakpointInfoArguments): void {
-
-		response.body = {
-			dataId: null,
-			description: "cannot break on data access",
-			accessTypes: undefined,
-			canPersist: false
-		};
-
-		if (args.variablesReference && args.name) {
-			//const v = this._variableHandles.get(args.variablesReference);
-			response.body.dataId = args.name;
-			response.body.description = args.name;
-			response.body.accessTypes = ["read", "write", "readWrite"];
-			response.body.canPersist = true;
-		}
-
-		this.sendResponse(response);
-	}
-
-	protected setDataBreakpointsRequest(response: DebugProtocol.SetDataBreakpointsResponse, args: DebugProtocol.SetDataBreakpointsArguments): void {
-
-		// clear all data breakpoints
-		this._runtime.clearAllDataBreakpoints();
-
-		response.body = {
-			breakpoints: []
-		};
-
-		for (const dbp of args.breakpoints) {
-			const ok = this._runtime.setDataBreakpoint(dbp.dataId, dbp.accessType || 'write');
-			response.body.breakpoints.push({
-				verified: ok
-			});
-		}
-
-		this.sendResponse(response);
-	}
-
-	protected completionsRequest(response: DebugProtocol.CompletionsResponse, args: DebugProtocol.CompletionsArguments): void {
-
-		response.body = {
-			targets: [
-				{
-					label: "item 10",
-					sortText: "10"
-				},
-				{
-					label: "item 1",
-					sortText: "01",
-					detail: "detail 1"
-				},
-				{
-					label: "item 2",
-					sortText: "02",
-					detail: "detail 2"
-				},
-				{
-					label: "array[]",
-					selectionStart: 6,
-					sortText: "03"
-				},
-				{
-					label: "func(arg)",
-					selectionStart: 5,
-					selectionLength: 3,
-					sortText: "04"
-				}
-			]
-		};
-		this.sendResponse(response);
-	}
-
-	protected cancelRequest(response: DebugProtocol.CancelResponse, args: DebugProtocol.CancelArguments) {
-		if (args.requestId) {
-			this._cancellationTokens.set(args.requestId, true);
-		}
-		if (args.progressId) {
-		}
-	}
-
-
-	protected setInstructionBreakpointsRequest(response: DebugProtocol.SetInstructionBreakpointsResponse, args: DebugProtocol.SetInstructionBreakpointsArguments) {
-
-		// clear all instruction breakpoints
-		this._runtime.clearInstructionBreakpoints();
-
-		// set instruction breakpoints
-		const breakpoints = args.breakpoints.map(ibp => {
-			const address = parseInt(ibp.instructionReference);
-			const offset = ibp.offset || 0;
-			return <DebugProtocol.Breakpoint>{
-				verified: this._runtime.setInstructionBreakpoint(address + offset)
-			};
-		});
-
-		response.body = {
-			breakpoints: breakpoints
-		};
-		this.sendResponse(response);
 	}
 
 	protected customRequest(command: string, response: DebugProtocol.Response, args: any) {
