@@ -1,8 +1,8 @@
 Debug methods.
 
-Base:             @PROC N   IF 1      _=1
-Fre() = 28,191    23,057    19,729    25615
-BAS   = 40 K      53 K      58 K      48 K
-LBL   = 56 K      61 K      74 K      61 K
-LST   = 485 K     645 K     772 K     590 K
-XEX   = 12 K      17 K      20 K      14 K
+Base:             @PROC N   IF 1      _=1       @PROC (Winner!)
+Fre() = 28,191    23,057    19,729    25615     25,623
+BAS   = 40 K      53 K      58 K      48 K      53 K
+LBL   = 56 K      61 K      74 K      61 K      61 K
+LST   = 485 K     645 K     772 K     590 K     568 K
+XEX   = 12 K      17 K      20 K      14 K      14 K

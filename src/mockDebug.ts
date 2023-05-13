@@ -115,12 +115,14 @@ PROC ___DEBUG_POLL
     get #5,___DEBUG_I
     if ___DEBUG_I=0 or err()<>1 then exit
 
-		' Update debug step/continue memory loc
-		'bget #5,&___DEBUG_MEM,2
-		'get #5, ___DEBUG_I
-		'? "Poking "; ___DEBUG_MEM; " from "; peek(___DEBUG_MEM); " to ";___DEBUG_I
-	'	get k
-		'poke ___DEBUG_MEM, ___DEBUG_I
+		IF ___DEBUG_I = 3 ' JumpTo Line
+			' Get stack location where we return to
+			___DEBUG_I = $60BA
+			___DEBUG_I = usr(&___DEBUG_I)
+
+			' Update the return address on the stack to the new line (danger, will robinson!)
+			bget #5, $103+peek(&___DEBUG_I+1), 2		
+		ENDIF
  
     ' Loop through location/value updates (CHECK and Breakpoint)
     bget #5,&___DEBUG_LEN,2
@@ -276,6 +278,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	
 		// make VS Code send the breakpointLocations request
 		response.body.supportsBreakpointLocationsRequest = true;
+		response.body.supportsGotoTargetsRequest = true;
 
 		// make VS Code send setVariable request
 		response.body.supportsSetVariable = true;
@@ -618,6 +621,18 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
+	protected gotoTargetsRequest(response: DebugProtocol.GotoTargetsResponse, args: DebugProtocol.GotoTargetsArguments): void {
+		response.body = { 
+			targets: [{ id: args.line, line: args.line} as DebugProtocol.GotoTarget]
+		};
+		this.sendResponse(response);
+	}
+	
+	protected gotoRequest(response: DebugProtocol.GotoResponse, args: DebugProtocol.GotoArguments): void {
+		this._runtime.jump(args.targetId);
+		this.sendResponse(response);
+	}
+
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
 		this._runtime.continue();
 		this.sendResponse(response);
@@ -627,6 +642,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.step();
 		this.sendResponse(response);
 	}
+
 
 	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
 		//this._runtime.step(args.granularity === 'instruction', true);
@@ -790,7 +806,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	private formatNumber(x: number) {
-		return this._valuesInHex ? '0x' + x.toString(16) : x.toString(10);
+		return this._valuesInHex ? '$' + x.toString(16) : x.toString(10);
 	}
 
 	private createSource(filePath: string): Source {

@@ -78,7 +78,8 @@ const VAR_TYPE_LEN: Map<string, number> = new Map([
 
 enum MessageCommand {
 	continue = 1,
-	stepNext = 2
+	stepNext = 2,
+	jump = 3
 } 
 
 /**
@@ -193,6 +194,14 @@ export class MockRuntime extends EventEmitter {
 		await this.waitOnProgram();
 	}
 
+	
+	/**
+	 * Jump to the line.
+	 */
+	public async jump(line : number) {
+		await this.sendMessageToProgram(MessageCommand.jump, line);
+		await this.waitOnProgram();
+	}
 	/**
 	 * Just put the current line number for now
 	 */
@@ -216,7 +225,7 @@ export class MockRuntime extends EventEmitter {
 	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint> {
 		path = this.normalizePathAndCasing(path);
 
-		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
+		const bp: IRuntimeBreakpoint = { verified: true, line,  id: this.breakpointId++ };
 		let bps = this.breakPoints.get(path);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
@@ -596,7 +605,7 @@ export class MockRuntime extends EventEmitter {
 		await this.fileAccessor.deleteFile(this._debugFileFromProg);
 	}
 
-	private async sendMessageToProgram(command: MessageCommand): Promise<void> {
+	private async sendMessageToProgram(command: MessageCommand, jumpTo: number = 0): Promise<void> {
 		const bps = this.breakPoints.get(this._sourceFile) ?? new Array<IRuntimeBreakpoint>();
 		
 		// If first line has a breakpoint set, and we are starting, change to step
@@ -615,19 +624,29 @@ export class MockRuntime extends EventEmitter {
 		  [word:location][word:length][data] sets
 		*/
 		
-		payload[0] = 1;// 1 for now. May extend later
+		payload[0] = command; // Let the program know our intent
 
 		// Set the appropriate memory location for stepping:
 		//this.setAtariWord(payload, 1, this._debugCheckAddress);
 		//payload[3] = command === MessageCommand.StepNext ? this.TOK_INCVAR : this.TOK_RET;
-		let index = 3;
-		let locValCount = 0;
+		let index = 1;
+
+		if (jumpTo>0) {
+			let newLineAddress = this._lineToAddressMap.get(jumpTo) || 0;
+			if (newLineAddress) {
+				this.setAtariWord(payload, index, newLineAddress);
+			  [payload[index], payload[index+1]] = [payload[index+1], payload[index]];
+				index+=2;
+			}
+		}
+
+		
+		let countIndex = index, locValCount = 0;
+		index+=2;
 
 		this.setAtariWord(payload,index, this._debugCheckAddress+1);
-		this.setAtariWord(payload,index+2, command === MessageCommand.stepNext ? this._debugBreakAddress : this._debugNopAddress);
+		this.setAtariWord(payload,index+2, command === MessageCommand.continue ?  this._debugNopAddress : this._debugBreakAddress);
 		index+=4; locValCount++;
-		
-		
 
 		// Clear breakpoints
 		for (let i=0;i<this.clearedBreakPoints.length;i++) {
@@ -655,7 +674,7 @@ export class MockRuntime extends EventEmitter {
 		this.clearedBreakPoints = [];
 		
 		// Set the number of [word:location][word:value] pairs that were added added
-		this.setAtariWord(payload,1, locValCount);
+		this.setAtariWord(payload, countIndex, locValCount);
 
 		// Send any variables to update in form of [word:location][word:length][data]		
 		this.variables.forEach(v => {

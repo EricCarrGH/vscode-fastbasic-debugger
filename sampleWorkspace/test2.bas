@@ -1,11 +1,19 @@
-A=1
-? "A = "; A
-? "A = "; A
+jj=0:hh=2:l=2
+PROC DF
+jj=jj+1
+hh=hh+2
+l=234+jj+hh
+ENDPROC
 
+A=1
+? "1 A = "; A
+? "2 A = "; A
+? "3 A = "; A
+@DF
 ? "Address of A"; &A
 
 a=23543
-
+@DF
 loc = &a
 
 hello$ = "Hello World"
@@ -18,6 +26,7 @@ for i=0 to 3
   id(i) = 1000+i
   player$(i) = "PLAYER "
   player$(i) =+str$(i)
+  @DF
 next i
 
 for i=0 to 3
