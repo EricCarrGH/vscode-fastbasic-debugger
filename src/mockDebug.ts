@@ -195,9 +195,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _configurationDone = new Subject();
 
-	private _cancellationTokens = new Map<number, boolean>();
-
-
 	private _valuesInHex = false;
 	private _useInvalidatedEvent = false;
 
@@ -354,7 +351,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// Inject debugger code into the bin source file copy
 		const breakpoints = this._runtime.breakPoints.get(this.normalizePathAndCasing(file)) ?? new Array<IRuntimeBreakpoint>();
 	
-		let lineCount = await this.injectDebuggerCode(binFolder + folderDelimiter + filename, breakpoints);
+		let lineCount = await this.injectDebuggerCode(binFolder + folderDelimiter + filename, breakpoints, Boolean(args.noDebug) );
 		
 		// Check if the compiler exists
 		if (!await this._fileAccessor.doesFileExist(args.compilerPath)) {
@@ -464,9 +461,13 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	private async injectDebuggerCode(file: string, breakpoints: IRuntimeBreakpoint[]): Promise<number> {
+	private async injectDebuggerCode(file: string, breakpoints: IRuntimeBreakpoint[], noDebug: boolean): Promise<number> {
 		let sourceLines = new TextDecoder().decode(await this._fileAccessor.readFile(file)).split(/\r?\n/);
 		let lineCount = sourceLines.length;
+
+		if (noDebug) {
+			return lineCount;
+		}
 
 		// Only inject debugging code if at least one breakpoint is set
 	   let i =  sourceLines.length;
