@@ -25,7 +25,7 @@ import { fastBasicChannel } from './activateMockDebug';
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 
-const DEBUGGER_STUB = `
+const DEBUGGER_PROGRAM = `
 DIM ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_LINE
  
 ' "No Op" proc called by "check" when not stepping through code
@@ -120,7 +120,7 @@ PROC ___DEBUG_POLL
 			___DEBUG_I = $60BA
 			___DEBUG_I = usr(&___DEBUG_I)
 
-			' Update the return address on the stack to the new line (danger, will robinson!)
+			' Update the return address on the stack to the new line (danger, Will Robinson!)
 			bget #5, $103+peek(&___DEBUG_I+1), 2		
 		ENDIF
  
@@ -498,7 +498,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			}
 			
 			// Append the debugger code at the end of the listing
-			sourceLines = sourceLines.concat(DEBUGGER_STUB.split("\n"));
+			sourceLines = sourceLines.concat(DEBUGGER_PROGRAM.split("\n"));
 	
 		} else {
 			// Don't end program until key press in debug mode (even when no breakpoints are added)

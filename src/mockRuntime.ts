@@ -145,6 +145,8 @@ export class MockRuntime extends EventEmitter {
   private _debugCheckAddress: number = 0;
 	private _debugBreakAddress: number = 0;
 	private _debugNopAddress: number = 0;
+	private _debug_TOK_RET: number = 0;
+	private _firstCall: boolean = true;
 	
 	constructor(private fileAccessor: FileAccessor) {
 		super();
@@ -162,6 +164,7 @@ export class MockRuntime extends EventEmitter {
 			// Load the source, which creates the memory dump file
 			await this.loadSource(program);
 			// Send initial message to start communication with the program before launching it
+			this._firstCall=true;
 			await this.sendMessageToProgram(MessageCommand.continue);
 		}
 
@@ -442,6 +445,11 @@ export class MockRuntime extends EventEmitter {
 					this._debugBreakAddress =  parseInt(parts[0].substring(5).trim(), 16);
 				} 
 
+				else if (parts[1]==="TOK_RET") {
+					this._debug_TOK_RET =  parseInt(parts[0].substring(6).trim(), 16);
+					this._debug_TOK_RET *= 257;
+				} 
+
 				// Get the memory location of each line in memory, to:
 				// 1. Determine which line the program stopped at
 				// 2. Set/clear breakpoints on line
@@ -640,9 +648,16 @@ export class MockRuntime extends EventEmitter {
 			}
 		}
 
-		
 		let countIndex = index, locValCount = 0;
 		index+=2;
+
+		// Replace INC in nop to an immediate RETURN to save a few cycles
+		if (this._firstCall) {
+			this._firstCall = false;
+			this.setAtariWord(payload,index, this._debugNopAddress);
+			this.setAtariWord(payload,index+2, this._debug_TOK_RET);
+			index+=4; locValCount++;
+		}
 
 		this.setAtariWord(payload,index, this._debugCheckAddress+1);
 		this.setAtariWord(payload,index+2, command === MessageCommand.continue ?  this._debugNopAddress : this._debugBreakAddress);
@@ -654,8 +669,7 @@ export class MockRuntime extends EventEmitter {
 			if (lineAddress) {
 				this.setAtariWord(payload,index, lineAddress+1);
 				this.setAtariWord(payload,index+2, this._debugCheckAddress);
-				locValCount++;
-				index+=4;
+				index+=4; locValCount++;
 			}
 		}
 
@@ -665,8 +679,7 @@ export class MockRuntime extends EventEmitter {
 			if (lineAddress) {
 				this.setAtariWord(payload,index, lineAddress+1);
 				this.setAtariWord(payload,index+2, this._debugBreakAddress);
-				locValCount++;
-				index+=4;
+				index+=4; locValCount++;
 			}
 		}
 
