@@ -28,13 +28,6 @@ import * as cp from 'child_process';
 const DEBUGGER_PROGRAM = `
 DIM ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_LINE
  
-' "No Op" proc called by "check" when not stepping through code
-' This will be replaced with the address of the BREAK when stepping
-PROC ___DEBUG_NOP
-	' Include a statement to prevent FastBasic optimizer from removing this proc's label
-	INC ___DEBUG_I 
-ENDPROC
-
 ' Called before any line set as a breakpoint, or by ___DEBUG_CHECK when stepping through
 PROC ___DEBUG_BREAK
 
@@ -158,7 +151,7 @@ ENDPROC
 ' Called before every line when a breakpoint is not set, to check if stepping. 
 ' Normally returns right away, except when stepping through the code
 PROC ___DEBUG_CHECK
-	@___DEBUG_NOP
+	___DEBUG_I = 0:___DEBUG_I = 0
 ENDPROC
 
 @___DEBUG_END

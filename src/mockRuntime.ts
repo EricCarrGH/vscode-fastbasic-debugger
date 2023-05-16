@@ -116,7 +116,7 @@ export class MockRuntime extends EventEmitter {
 	private variables = new Map<string, RuntimeVariable>();
 	
 	// the contents (= lines) of the one and only file
-	private sourceLines: string[] = [];
+	//private sourceLines: string[] = [];
 	
 	// This is the next line that will be 'executed'
 	private _currentLine = 0;
@@ -139,15 +139,12 @@ export class MockRuntime extends EventEmitter {
 	// so that the frontend can match events with breakpoints.
 	private breakpointId = 1;
 
-	private _breakAddresses = new Map<string, string>();
 	private _addressToLineMap = new Map<number, number>();
 	private _lineToAddressMap = new Map<number, number>();
   private _debugCheckAddress: number = 0;
 	private _debugBreakAddress: number = 0;
-	private _debugNopAddress: number = 0;
-	private _debug_TOK_RET: number = 0;
-	private _debug_TOK_JUMP: number = 0;
-	private _firstCall: boolean = true;
+	private _debugTokRET: number = 0;
+	private _debugTokJUMP: number = 0;
 	
 	constructor(private fileAccessor: FileAccessor) {
 		super();
@@ -165,7 +162,6 @@ export class MockRuntime extends EventEmitter {
 			// Load the source, which creates the memory dump file
 			await this.loadSource(program);
 			// Send initial message to start communication with the program before launching it
-			this._firstCall=true;
 			await this.sendMessageToProgram(MessageCommand.continue);
 		}
 
@@ -249,7 +245,7 @@ export class MockRuntime extends EventEmitter {
 			const index = bps.findIndex(bp => bp.line === line);
 			if (index >= 0) {
 				const bp = bps[index];
-				bps.splice(index, 1)
+				bps.splice(index, 1);
 				this.clearedBreakPoints.push(bp);
 				return bp;
 			}
@@ -313,7 +309,7 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	private async initializeContents(memory: Uint8Array, list: Uint8Array, labels: Uint8Array) {
-		this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
+		//this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
 		let listLines = new TextDecoder().decode(list).split(/\r?\n/);
 		let labelLines = new TextDecoder().decode(labels).split(/\r?\n/);
 
@@ -365,6 +361,7 @@ export class MockRuntime extends EventEmitter {
 			00003Dr 1  rr           	makevar	"A5"
 			*/
 
+			var skipValue=false;
 			var value;
 
 			// Determine byte length for this variable type
@@ -395,6 +392,8 @@ export class MockRuntime extends EventEmitter {
 							for(let k=0;k<arraySize;k++) {
 								value.push(new RuntimeVariable(k.toString(), varType === VAR_STRING ? "":0, varType, Number(VAR_TYPE_LEN.get(varType))));
 							}
+						} else {
+							skipValue = true;
 						}
 						break;
 					}
@@ -403,7 +402,7 @@ export class MockRuntime extends EventEmitter {
 				value = varType === VAR_STRING ? "" : 0;
 			}	
 		
-			if (typeof value !== 'undefined') {
+			if (!skipValue && typeof value !== 'undefined') {
 
 				if (varType === VAR_STRING) {
 					name = name + "$";
@@ -436,10 +435,7 @@ export class MockRuntime extends EventEmitter {
 			  if (parts[1]==="fb_lbl____DEBUG_CHECK") {
 					this._debugCheckAddress =  parseInt(parts[0].substring(5).trim(), 16);
 				} 
-				else if (parts[1]==="fb_lbl____DEBUG_NOP") {
-					this._debugNopAddress =  parseInt(parts[0].substring(5).trim(), 16);
-				} 
-
+				
 				// Get the memory location of the debug_break proc, to:
 				// 1. Set lines to call it when they have a breakpoint set
 				else if (parts[1]==="fb_lbl____DEBUG_BREAK") {
@@ -447,11 +443,11 @@ export class MockRuntime extends EventEmitter {
 				} 
 
 				else if (parts[1]==="TOK_RET") {
-					this._debug_TOK_RET =  parseInt(parts[0].substring(6).trim(), 16);
+					this._debugTokRET =  parseInt(parts[0].substring(6).trim(), 16);
 					//this._debug_TOK_RET *= 257;
 				} 
 				else if (parts[1]==="TOK_JUMP") {
-					this._debug_TOK_JUMP =  parseInt(parts[0].substring(6).trim(), 16);
+					this._debugTokJUMP =  parseInt(parts[0].substring(6).trim(), 16);
 				} 
 				 
 
@@ -492,11 +488,7 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('end');
 			return;
 		}
-		if (this._debugNopAddress===0) {
-			//fastBasicChannel.appendLine(`fb_lbl____DEBUG_NOP not found. Aborting!`);
-			//this.sendEvent('end');
-			//return;
-		}
+		
 		if (this._debugBreakAddress===0) {
 			fastBasicChannel.appendLine(`fb_lbl____DEBUG_BREAK not found. Aborting!`);
 			this.sendEvent('end');
@@ -570,7 +562,7 @@ export class MockRuntime extends EventEmitter {
 								varIndex = heapIndex;
 								heapIndex+=typeLen;
 							}
-							v.setValueFromSource(this.getAtariValue(debugFileResponse, varIndex, v.type))
+							v.setValueFromSource(this.getAtariValue(debugFileResponse, varIndex, v.type));
 
 							break;
 						}
@@ -640,12 +632,9 @@ export class MockRuntime extends EventEmitter {
 		*/
 		
 		payload[0] = command; // Let the program know our intent
-
-		// Set the appropriate memory location for stepping:
-		//this.setAtariWord(payload, 1, this._debugCheckAddress);
-		//payload[3] = command === MessageCommand.StepNext ? this.TOK_INCVAR : this.TOK_RET;
 		let index = 1;
 
+		// Set the appropriate memory location for stepping:
 		if (jumpTo>0) {
 			let newLineAddress = this._lineToAddressMap.get(jumpTo) || 0;
 			if (newLineAddress) {
@@ -657,16 +646,6 @@ export class MockRuntime extends EventEmitter {
 
 		let countIndex = index, locValCount = 0;
 		index+=2;
-
-		// Replace INC in nop to an immediate RETURN to save a few cycles
-		/*if (this._firstCall) {
-			this._firstCall = false;
-			this.setAtariWord(payload,index, this._debugNopAddress);
-			this.setAtariWord(payload,index+2, this._debug_TOK_RET);
-			index+=4; locValCount++;
-		}*/
-
-		//STARS NOT RUNNIGN - check line returned ??
 
 		// Clear breakpoints
 		for (let i=0;i<this.clearedBreakPoints.length;i++) {
@@ -698,17 +677,16 @@ export class MockRuntime extends EventEmitter {
 
 		// Update _check to either return or break
 		this.setAtariWord(payload,index, this._debugCheckAddress);
-		//this.setAtariWord(payload,index+2, command === MessageCommand.continue ?  this._debugNopAddress : this._debugBreakAddress);
+
 		if (command === MessageCommand.continue) {
 			this.setAtariWord(payload,index+2, 1);
-			payload[index+4] = this._debug_TOK_RET;
+			payload[index+4] = this._debugTokRET;
 			index+=5;
 		} else {
 			this.setAtariWord(payload,index+2, 3);
-			payload[index+4] = this._debug_TOK_JUMP;
+			payload[index+4] = this._debugTokJUMP;
 			this.setAtariWord(payload, index+5, this._debugBreakAddress);
 			index+=7;
-			//payload[index+4] = this._debugBreakAddress % 256;
 		}
 		
 		this.variables.forEach(v => {
