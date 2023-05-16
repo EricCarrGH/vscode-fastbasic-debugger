@@ -146,6 +146,7 @@ export class MockRuntime extends EventEmitter {
 	private _debugBreakAddress: number = 0;
 	private _debugNopAddress: number = 0;
 	private _debug_TOK_RET: number = 0;
+	private _debug_TOK_JUMP: number = 0;
 	private _firstCall: boolean = true;
 	
 	constructor(private fileAccessor: FileAccessor) {
@@ -433,7 +434,7 @@ export class MockRuntime extends EventEmitter {
 				// 1. Toggle stepping through code at the start of the proc
 				// 2. Set lines to call it when they don't have a breakpoint set
 			  if (parts[1]==="fb_lbl____DEBUG_CHECK") {
-						this._debugCheckAddress =  parseInt(parts[0].substring(5).trim(), 16);
+					this._debugCheckAddress =  parseInt(parts[0].substring(5).trim(), 16);
 				} 
 				else if (parts[1]==="fb_lbl____DEBUG_NOP") {
 					this._debugNopAddress =  parseInt(parts[0].substring(5).trim(), 16);
@@ -447,8 +448,12 @@ export class MockRuntime extends EventEmitter {
 
 				else if (parts[1]==="TOK_RET") {
 					this._debug_TOK_RET =  parseInt(parts[0].substring(6).trim(), 16);
-					this._debug_TOK_RET *= 257;
+					//this._debug_TOK_RET *= 257;
 				} 
+				else if (parts[1]==="TOK_JUMP") {
+					this._debug_TOK_JUMP =  parseInt(parts[0].substring(6).trim(), 16);
+				} 
+				 
 
 				// Get the memory location of each line in memory, to:
 				// 1. Determine which line the program stopped at
@@ -473,7 +478,9 @@ export class MockRuntime extends EventEmitter {
 							this._varMinLoc = memLoc;
 						}
 						v.memLoc = memLoc;
-						this._varMemSize += VAR_TYPE_LEN.get(v.type) || 0;
+						if (v.type !== VAR_STRING) {
+							this._varMemSize += VAR_TYPE_LEN.get(v.type) || 0;
+						}
 					}	
 				}
 			}		
@@ -486,9 +493,9 @@ export class MockRuntime extends EventEmitter {
 			return;
 		}
 		if (this._debugNopAddress===0) {
-			fastBasicChannel.appendLine(`fb_lbl____DEBUG_NOP not found. Aborting!`);
-			this.sendEvent('end');
-			return;
+			//fastBasicChannel.appendLine(`fb_lbl____DEBUG_NOP not found. Aborting!`);
+			//this.sendEvent('end');
+			//return;
 		}
 		if (this._debugBreakAddress===0) {
 			fastBasicChannel.appendLine(`fb_lbl____DEBUG_BREAK not found. Aborting!`);
@@ -652,16 +659,14 @@ export class MockRuntime extends EventEmitter {
 		index+=2;
 
 		// Replace INC in nop to an immediate RETURN to save a few cycles
-		if (this._firstCall) {
+		/*if (this._firstCall) {
 			this._firstCall = false;
 			this.setAtariWord(payload,index, this._debugNopAddress);
 			this.setAtariWord(payload,index+2, this._debug_TOK_RET);
 			index+=4; locValCount++;
-		}
+		}*/
 
-		this.setAtariWord(payload,index, this._debugCheckAddress+1);
-		this.setAtariWord(payload,index+2, command === MessageCommand.continue ?  this._debugNopAddress : this._debugBreakAddress);
-		index+=4; locValCount++;
+		//STARS NOT RUNNIGN - check line returned ??
 
 		// Clear breakpoints
 		for (let i=0;i<this.clearedBreakPoints.length;i++) {
@@ -690,6 +695,22 @@ export class MockRuntime extends EventEmitter {
 		this.setAtariWord(payload, countIndex, locValCount);
 
 		// Send any variables to update in form of [word:location][word:length][data]		
+
+		// Update _check to either return or break
+		this.setAtariWord(payload,index, this._debugCheckAddress);
+		//this.setAtariWord(payload,index+2, command === MessageCommand.continue ?  this._debugNopAddress : this._debugBreakAddress);
+		if (command === MessageCommand.continue) {
+			this.setAtariWord(payload,index+2, 1);
+			payload[index+4] = this._debug_TOK_RET;
+			index+=5;
+		} else {
+			this.setAtariWord(payload,index+2, 3);
+			payload[index+4] = this._debug_TOK_JUMP;
+			this.setAtariWord(payload, index+5, this._debugBreakAddress);
+			index+=7;
+			//payload[index+4] = this._debugBreakAddress % 256;
+		}
+		
 		this.variables.forEach(v => {
 			if (v.memLoc && v.modified) {
 				v.modified = false;

@@ -77,14 +77,14 @@ PROC ___DEBUG_BREAK
 					
           bput #4, ___DEBUG_MEM, 2
           bput #4, dpeek(___DEBUG_MEM), 256
-					inc ___DEBUG_MEM: inc ___DEBUG_MEM
+					if ___DEBUG_MEM >0
+						inc ___DEBUG_MEM: inc ___DEBUG_MEM
+					ENDIF
 
           ___DEBUG_LEN=___DEBUG_LEN-256
       wend
     else
-      
       bput #4, ___DEBUG_MEM, ___DEBUG_LEN
-
       ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
     ENDIF
     
