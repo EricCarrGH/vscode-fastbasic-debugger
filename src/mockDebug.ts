@@ -322,6 +322,10 @@ export class MockDebugSession extends LoggingDebugSession {
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
+		if (args.sourceFile.toLocaleLowerCase().endsWith(".json")) {
+			this.sendEvent(new TerminatedEvent());
+			return undefined;
+		}
 		// Create a bin folder to hold compiled/symbol files
 		let isWindows = 'win32' === process.platform;
 		var folderDelimiter = isWindows ? "\\" : "/";
