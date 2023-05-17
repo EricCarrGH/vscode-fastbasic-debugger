@@ -68,7 +68,8 @@
   "activationEvents": [
     "onDebugResolve:fastbasic",
     "onDebugDynamicConfigurations:fastbasic",
-    "onCommand:extension.fastbasic-debugger.getProgramName"
+    "onCommand:extension.fastbasic-debugger.getProgramName",
+    "onLanguage:basic"
   ],
   "workspaceTrust": {
     "request": "never"

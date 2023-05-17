@@ -1,6 +1,3 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
 /*
  * activateMockDebug.ts containes the shared extension code that can be executed both in node.js and the browser.
  */
@@ -95,7 +92,6 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 	}
 
 }
-
 
 
 class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
