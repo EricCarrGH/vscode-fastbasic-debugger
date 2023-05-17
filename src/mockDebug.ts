@@ -716,15 +716,19 @@ export class MockDebugSession extends LoggingDebugSession {
 		let dapVariable: DebugProtocol.Variable = {
 			name: v.name,
 			value: '???',
-			type: v.type,
+			type: `${v.type} |  ADR=$${v.memLoc.toString(16).toUpperCase()}`,
 			variablesReference: 0,
 			evaluateName: v.name
 		};
 
 		if (Array.isArray(v.value)) {
-			dapVariable.value = `${v.value[0].type} Array (${v.value.length - 1})`;
-			v.reference ??= this._variableHandles.create(v);
-			dapVariable.variablesReference = v.reference;
+			if (v.largeArray) {
+				dapVariable.value = `${v.value[0].type} Array (${v.value[0].value})`;
+			}else {
+				dapVariable.value = `${v.value[0].type} Array (${v.value.length - 1})`;
+				v.reference ??= this._variableHandles.create(v);
+				dapVariable.variablesReference = v.reference;
+			}
 			dapVariable.presentationHint = { attributes: ["readOnly"] };
 		} else {
 			switch (v.type) {

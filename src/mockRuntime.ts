@@ -44,6 +44,7 @@ export class RuntimeVariable {
 
 	public memLoc: number = 0;
 	public modified: boolean = false;
+	public largeArray: boolean = false;
 
 	public get value() {
 		return this._value;
@@ -361,9 +362,8 @@ export class MockRuntime extends EventEmitter {
 			00003Dr 1  rr           	makevar	"A5"
 			*/
 
-			var skipValue=false;
 			var value;
-
+			let isLargeArray = false;
 			// Determine byte length for this variable type
 			var byteLen= VAR_TYPE_LEN.get(varType);
 			if (!byteLen) {
@@ -386,14 +386,14 @@ export class MockRuntime extends EventEmitter {
 						}
 
 						byteLen *= arraySize;
-
+						value = [];
 						if (arraySize < 256) {
-							value = [];
 							for(let k=0;k<arraySize;k++) {
 								value.push(new RuntimeVariable(k.toString(), varType === VAR_STRING ? "":0, varType, Number(VAR_TYPE_LEN.get(varType))));
 							}
 						} else {
-							skipValue = true;
+							value.push(new RuntimeVariable("0", arraySize - 1, varType, Number(VAR_TYPE_LEN.get(varType))));
+							isLargeArray = true;
 						}
 						break;
 					}
@@ -402,7 +402,7 @@ export class MockRuntime extends EventEmitter {
 				value = varType === VAR_STRING ? "" : 0;
 			}	
 		
-			if (!skipValue && typeof value !== 'undefined') {
+			if (typeof value !== 'undefined') {
 
 				if (varType === VAR_STRING) {
 					name = name + "$";
@@ -411,6 +411,7 @@ export class MockRuntime extends EventEmitter {
 				}
 		
 				let v = new RuntimeVariable(name, value, varType, byteLen);
+				v.largeArray = isLargeArray;
 				this.variables.set(name, v);
 			}
 		}
@@ -500,18 +501,22 @@ export class MockRuntime extends EventEmitter {
 		this.setAtariWord(requestMemoryDump, 0, this._varMinLoc);
 		this.setAtariWord(requestMemoryDump, 2, this._varMemSize);
 		let memDumpIndex = 4;
-		Array.from(this.variables.keys()).forEach(key => {
-			let v = this.variables.get(key);
-			if (v) {
+
+		// Sort var list for easier visual lookup of variables
+		let sortedVars = [...this.variables].sort((a,b) => a[0] > b[0] ? 1 : -1);
+
+		// Generate memory dump request
+		sortedVars.forEach(rv => {
+			let v = rv[1];
 				if(v.type === VAR_STRING || Array.isArray(v.value))  {
 					this.setAtariWord(requestMemoryDump, memDumpIndex, v.memLoc);
-					this.setAtariWord(requestMemoryDump, memDumpIndex+2, v.byteLen);
+					this.setAtariWord(requestMemoryDump, memDumpIndex+2, v.largeArray ? 2 : v.byteLen);
 					memDumpIndex+=4;
 				}
-			} else {
-				this.variables.delete(key);
-			}
 		});
+
+		// Set variable map to sorted list (better user experience)
+		this.variables = new Map(sortedVars);
 		
 		requestMemoryDump = requestMemoryDump.slice(0,memDumpIndex);
 
@@ -549,6 +554,12 @@ export class MockRuntime extends EventEmitter {
 				
 				let typeLen = VAR_TYPE_LEN.get(v.type) || 1;
 				let arrayLen = v.byteLen / typeLen;
+				if (v.largeArray) {
+					// Get the real memory location for this large array
+					v.memLoc = Number(this.getAtariValue(debugFileResponse, heapIndex, VAR_WORD)); 
+					heapIndex+=4;
+					return;
+				}
 				switch (v.type) {
 					case VAR_WORD:
 					case VAR_FLOAT:

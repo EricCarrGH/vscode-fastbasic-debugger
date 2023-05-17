@@ -1,24 +1,66 @@
-/*
- * extension.ts (and activateMockDebug.ts) forms the "plugin" that plugs into VS Code and contains the code that
- * connects VS Code with the debug adapter.
- * 
- * extension.ts contains code for launching the debug adapter in three different ways:
- * - as an external program communicating with VS Code via stdin/stdout,
- * - as a server process communicating with VS Code via sockets or named pipes, or
- * - as inlined code running in the extension itself (default).
- * 
- * Since the code in extension.ts uses node.js APIs it cannot run in the browser.
- */
-
 'use strict';
 
 import * as vscode from 'vscode';
 import { activateMockDebug } from './activateMockDebug';
 
 export function activate(context: vscode.ExtensionContext) {
+
+	// Support PROCs in Outline
+	context.subscriptions.push(vscode.languages.registerDocumentSymbolProvider({scheme: "file", language: "basic"}, new FastBasicSymbolProvider()));
+vscode.languages.registerDefinitionProvider({scheme: "file", language: "basic"}, new FastBasicDefinitionProvider());
 	activateMockDebug(context);
 }
 
 export function deactivate() {
 	// nothing to do
+}
+
+let symbols :  vscode.DocumentSymbol[] = [];
+
+class FastBasicDefinitionProvider implements vscode.DefinitionProvider {
+	provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<vscode.Definition | vscode.LocationLink[]> {
+		let wr = document.getWordRangeAtPosition(position);
+		if (wr?.isSingleLine) {
+			let name = document.lineAt(position.line).text.slice(wr.start.character,wr.end.character).toUpperCase();
+		 let sym = symbols.find(s=> s.name.toUpperCase() === name);
+		 if (sym) {
+			return new vscode.Location(vscode.Uri.file(document.fileName), sym.range);
+		 }
+		}
+		return undefined;
+	}
+
+}
+
+class FastBasicSymbolProvider implements vscode.DocumentSymbolProvider {
+	public provideDocumentSymbols(
+			document: vscode.TextDocument,
+			token: vscode.CancellationToken): Promise<vscode.DocumentSymbol[]> {
+			return new Promise((resolve, reject) => {
+					//let symbols: vscode.DocumentSymbol[] = [];
+					for (var i = 0; i < document.lineCount; i++) {
+							var line = document.lineAt(i);
+							var lineText = line.text.trim().split(':')[0];
+							var lineLower = lineText.toLowerCase();
+							
+							if (!lineLower.startsWith("proc ") && !lineLower.startsWith("pr.") ) {
+								continue;
+							}
+							
+							var name = lineText.slice(lineText[2] === "." ? 3:4).trim();
+							if (name.length>0) {
+								let nameParts = name.split(' ');
+
+								let paramList = nameParts.length > 1 ? nameParts.slice(1).join(', ') : "";
+								
+								let symbol = new vscode.DocumentSymbol(
+									nameParts[0], paramList,
+									vscode.SymbolKind.Function,
+									line.range, line.range);
+								symbols.push(symbol);
+							}
+					}
+					resolve(symbols);
+			});
+	}
 }
