@@ -1,14 +1,22 @@
 'use strict';
 
 import * as vscode from 'vscode';
-import { activateMockDebug } from './activateMockDebug';
+import { activateDebugger } from './activateDebugger';
 
 export function activate(context: vscode.ExtensionContext) {
 
-	// Support PROCs in Outline
-	context.subscriptions.push(vscode.languages.registerDocumentSymbolProvider({scheme: "file", language: "basic"}, new FastBasicSymbolProvider()));
-vscode.languages.registerDefinitionProvider({scheme: "file", language: "basic"}, new FastBasicDefinitionProvider());
-	activateMockDebug(context);
+	
+	context.subscriptions.push(
+		// Show Procs in Outline
+		vscode.languages.registerDocumentSymbolProvider({scheme: "file", language: "basic"}, new FastBasicSymbolProvider()),
+
+		// Support Proc definition (pressing F12)
+		vscode.languages.registerDefinitionProvider({scheme: "file", language: "basic"}, new FastBasicDefinitionProvider())
+		
+	);
+
+	// Activate the main debugger
+	activateDebugger(context);
 }
 
 export function deactivate() {
@@ -37,7 +45,6 @@ class FastBasicSymbolProvider implements vscode.DocumentSymbolProvider {
 			document: vscode.TextDocument,
 			token: vscode.CancellationToken): Promise<vscode.DocumentSymbol[]> {
 			return new Promise((resolve, reject) => {
-					//let symbols: vscode.DocumentSymbol[] = [];
 					for (var i = 0; i < document.lineCount; i++) {
 							var line = document.lineAt(i);
 							var lineText = line.text.trim().split(':')[0];

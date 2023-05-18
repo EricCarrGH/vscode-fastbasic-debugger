@@ -35,6 +35,16 @@ endif
 ' Silence the loud SIO noise
 poke 65,0
 
+
+dim responseBuffer(1023) BYTE
+
+' Align screenBuffer at 4096 boundary (and charBuffer at 1024 boundary afterward)
+i = (&responseBuffer+1024) mod 4096
+if i>0 then dim filler(4095-i) BYTE
+
+dim screenBuffer(2047) BYTE, charBuffer(1023), move_loc(7), move_bits(7) BYTE
+
+
 ' Game state variables (read from server)
 Dim lastResult$, round, pot, activePlayer, prompt$, activeSecondsRemaining, validMoveCode$(5), validMove$(5)
 dim player_name$(7), player_status(7), player_bet(7), player_move$(7), player_purse(7), player_hand$(7), player_prevHand$(7)
@@ -43,14 +53,6 @@ dim player_name$(7), player_status(7), player_bet(7), player_move$(7), player_pu
 dim validMoveCount, playerCount, currentCard, xOffset, requestedMove$, previousPot, playerJustMoved, prevPlayerCount
 
 
-' The screen buffer is large to accomodate the playfield and character at atari required byte aligned locations.
-
-' ScreenBuffer layout:
-' N bytes    - empty space to set the Playfield location at a 4096 byte increment
-' 2048 bytes - Playfield (1040 or 40*26 effectively used) 
-' 1024 bytes - Character fonts
-' 22 bytes   - Display List 
-DIM responseBuffer(4096) BYTE, screenBuffer(8192) BYTE, move_loc(7), move_bits(7) BYTE
 
 ' Other varibles
 DIM Screen,__print_inverse, move_color, __print_reverse, noAnim, cursorY, cursorX
@@ -1336,6 +1338,7 @@ PROC InitScreen
   mset pm.0,1024,0
   mset pm.0,255,255
   mset pm.3,255,255
+  pm_loc = pm.0
 
   ' Make the sidebar and selection cursor 4x wide to block as much of the screen as possible, and the secret card 1x wide
   mset 53256,4,3: poke 53257, 0
@@ -1363,34 +1366,24 @@ PROC InitScreen
 
   ' ============= PLAYFIELD =============
 
-  ' We must set the screen to a 4096 aligned location in memory.
-
-  ' Use Floating point in a simple loop to arrive at a 4096 byte aligned location within our 8192 buffer.
-  ' We can't MOD values over 32768, since FastBasic treats them negative
-  bufLoc%=&screenBuffer
-  screenFloat% = 0 :repeat: screenFloat% = screenFloat% + 4096: until screenFloat% >= bufLoc%
-  screen = int(screenFloat%)
-
-  ' Load character set 2048 above screen buffer so it is 1024 byte aligned
-  screenFloat% = screenFloat% + 2048
-  ' Copy the character set data to the location
-  move &font,int(screenFloat%),8*128
+  screen = &screenBuffer
+  
+  ' Copy the custom character set data to the location
+  move &font,&charBuffer,8*128
 
   ' Tell Atari to use the new location
-  P.756,int(screenFloat%/256)
+  P.756,&charBuffer/256
 
   ' Custom Display List to give us 2 more rows (40x26)
   DL$ = ""$60$F0$44$00$00$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$04$84$20$04$41$00$00
   
   ' Copy the display list from the string to memory.
-  displayList = int(screenFloat%+1024)
-  move &DL$+1,displayList, len(DL$)
-
+  displayList = &DL$+1
   dpoke displayList+len(DL$)-2,displayList
   dpoke 560, displayList
 
   ' Tell the display list the new location of the screen buffer
-  dpoke displayList+3,screen
+  dpoke displayList+3,&screenBuffer
 
   ' Use DLI to change the text/background colors of the bottom status row
   DLISET dli_colors = background_color INTO $D01A, text_color INTO $D017

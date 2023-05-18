@@ -1,20 +1,18 @@
 /*
- * activateMockDebug.ts containes the shared extension code that can be executed both in node.js and the browser.
+ * Activates the debugger
  */
 
 'use strict';
 
 import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
-import { MockDebugSession } from './mockDebug';
-import { FileAccessor } from './mockRuntime';
+import { FastbasicDebugSession } from './debugger';
+import { FileAccessor } from './runtime';
 
-//export let fastBasicChannel: vscode.Terminal;
 export let fastBasicChannel: vscode.OutputChannel;
 
-export function activateMockDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
+export function activateDebugger(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
 
-	//fastBasicChannel = vscode.window.createTerminal("FastBasic");
 	fastBasicChannel = vscode.window.createOutputChannel("FastBasic");
   
 	context.subscriptions.push(
@@ -60,13 +58,13 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 
 	context.subscriptions.push(vscode.commands.registerCommand('extension.fastbasic-debugger.getProgramName', config => {
 		return vscode.window.showInputBox({
-			placeHolder: "Please enter the name of a markdown file in the workspace folder",
+			placeHolder: "Please enter the name of a fastbasic file in the workspace folder",
 			value: "${file}"
 		});
 	}));
 
 	// register a configuration provider for 'fastbasic' debug type
-	const provider = new MockConfigurationProvider();
+	const provider = new FastbasicConfigurationProvider();
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('fastbasic', provider));
 
 	// register a dynamic configuration provider for 'fastbasic' debug type
@@ -94,7 +92,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 }
 
 
-class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
+class FastbasicConfigurationProvider implements vscode.DebugConfigurationProvider {
 
 	/**
 	 * Massage a debug configuration just before a debug session is being launched,
@@ -204,6 +202,6 @@ function pathToUri(path: string) {
 class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
 
 	createDebugAdapterDescriptor(_session: vscode.DebugSession): ProviderResult<vscode.DebugAdapterDescriptor> {
-		return new vscode.DebugAdapterInlineImplementation(new MockDebugSession(workspaceFileAccessor));
+		return new vscode.DebugAdapterInlineImplementation(new FastbasicDebugSession(workspaceFileAccessor));
 	}
 }

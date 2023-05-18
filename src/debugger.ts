@@ -1,5 +1,5 @@
 /*
- * mockDebug.ts implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
+ * Implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
  * into requests and events of the real "execution engine" or "debugger" (here: class MockRuntime).
  * When implementing your own debugger extension for VS Code, most of the work will go into the Debug Adapter.
  * Since the Debug Adapter is independent from VS Code, it can be used in any client (IDE) supporting the Debug Adapter Protocol.
@@ -19,143 +19,14 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, IRuntimeVariableType } from './mockRuntime';
+import { FastbasicRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, IRuntimeVariableType } from './runtime';
 import { Subject } from 'await-notify';
-import { fastBasicChannel } from './activateMockDebug';
+import { fastBasicChannel } from './activateDebugger';
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import {DEBUG_PROGRAM} from './fastbasicDebugProgram';
 
-const DEBUGGER_PROGRAM = `
-DIM ___DEBUG_MEM, ___DEBUG_LEN, ___DEBUG_I, ___DEBUG_LINE
- 
-' Called before any line set as a breakpoint, or by ___DEBUG_CHECK when stepping through
-PROC ___DEBUG_BREAK
 
-	' Short Assembly routine ($BA, $60) to retrieve the current stack pointer
-	' Copies Stack Register to X register, which is returned to FastBasic
-	___DEBUG_I = $60BA
-	___DEBUG_I = usr(&___DEBUG_I)
-
-	' Retrieve address of current line from 6502 stack ($100 + stack pointer + 3)
-	___DEBUG_LINE=dpeek($103+peek(&___DEBUG_I+1))
-
-	'PRINT ___DEBUG_LINE
-  close #5:open #5,4,0,"H4:debug.mem"
-  if err()<>1 THEN EXIT 
-  close #4:open #4,8,0,"H4:debug.out"
-  put #4, 1 ' Variable memory dump
-  bput #4, &___DEBUG_LINE, 2
-	
-  ___DEBUG_I=0
-  do
-    ' Retrieve the next ___DEBUG_MEM, ___DEBUG_LEN combination (memory location and length to write out)
-    ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
-    
-    ' The first mem/size block is for variables, so we dump the contents of MEM.
-    ' All subsequent blocks are for array/string regions, so we 
-    ' need to dump the contents that MEM *POINTS TO*, and send that new location to the debugger
-    if ___DEBUG_I
-			___DEBUG_MEM = dpeek(___DEBUG_MEM)
-       bput #4, &___DEBUG_MEM, 2
-    endif
-
-    INC ___DEBUG_I
-
-    ' String array points to a second array that points to each string
-		' TODO - support non strings with a len of 256!
-    if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
-      while ___DEBUG_LEN>0
-          
-          '? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
-					
-          bput #4, ___DEBUG_MEM, 2
-          bput #4, dpeek(___DEBUG_MEM), 256
-					if ___DEBUG_MEM >0
-						inc ___DEBUG_MEM: inc ___DEBUG_MEM
-					ENDIF
-
-          ___DEBUG_LEN=___DEBUG_LEN-256
-      wend
-    else
-      bput #4, ___DEBUG_MEM, ___DEBUG_LEN
-      ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
-    ENDIF
-    
-    
-  '  ? "wrote (was " ; ___DEBUG_MEMO ; ") @";___DEBUG_MEM; " : "; ___DEBUG_LEN
-    
-  loop
-  close #4
-  close #5
-  XIO #5, 33, 0, 0, "H4:debug.in"
-	@___DEBUG_POLL
-ENDPROC
-
-PROC ___DEBUG_POLL
-  
-  ' Wait for outgoing file to be removed by debugger
-  do
-    open #5,4,0,"H4:debug.out"
-    if err()<>1
-      close #5:exit
-    endif
-    close #5
-    pause 10
-  loop
-  
-  close #5:open #5,4,0,"H4:debug.in"
-  if err()=1 
-    get #5,___DEBUG_I
-    if ___DEBUG_I=0 or err()<>1 then exit
-
-		IF ___DEBUG_I = 3 ' JumpTo Line
-			' Get stack location where we return to
-			___DEBUG_I = $60BA
-			___DEBUG_I = usr(&___DEBUG_I)
-
-			' Update the return address on the stack to the new line (danger, Will Robinson!)
-			bget #5, $103+peek(&___DEBUG_I+1), 2		
-		ENDIF
- 
-    ' Loop through location/value updates (CHECK and Breakpoint)
-    bget #5,&___DEBUG_LEN,2
-		FOR ___DEBUG_I = 1 TO ___DEBUG_LEN
-			bget #5,&___DEBUG_MEM,2
-			bget #5,___DEBUG_MEM,2
-		NEXT
-
-    ' Update any variable memory from debugger
-    do    
-      ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
-      bget #5, ___DEBUG_MEM, ___DEBUG_LEN    
-    loop
-
-    close #5
-  endif
-
-	' Reference ___DEBUG_BREAK so FastBasic optimizer will keep it
-	IF &___DEBUG_LINE = 0 THEN @___DEBUG_BREAK
-
-  ' Continue execution
-  ' ? "[CONTINUE]"
-ENDPROC
-
-PROC ___DEBUG_END
- close #4:open #4,8,0,"H4:debug.out"
- put #4, 9 ' End
- close #4
- XIO #5, 33, 0, 0, "H4:debug.in"
- get ___DEBUG_I
-ENDPROC
-
-' Called before every line when a breakpoint is not set, to check if stepping. 
-' Normally returns right away, except when stepping through the code
-PROC ___DEBUG_CHECK
-	___DEBUG_I = 0:___DEBUG_I = 0
-ENDPROC
-
-@___DEBUG_END
-`;
 /**
  * This interface describes the fastbasic-debugger specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
@@ -178,13 +49,13 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
 
 
-export class MockDebugSession extends LoggingDebugSession {
+export class FastbasicDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static threadID = 1;
 
-	// a Mock runtime (or debugger)
-	private _runtime: MockRuntime;
+	// runtime 
+	private _runtime: FastbasicRuntime;
 
 	private _variableHandles = new Handles<'locals' | RuntimeVariable>();
 
@@ -202,49 +73,24 @@ export class MockDebugSession extends LoggingDebugSession {
 		super("fastbasic-debugger.txt");
 		this._fileAccessor = fileAccessor;
 
-		// this debugger uses zero-based lines and columns
+		// Fastbasic starts line numbering at 1
 		this.setDebuggerLinesStartAt1(true);
 		this.setDebuggerColumnsStartAt1(false);
 
-		this._runtime = new MockRuntime(fileAccessor);
+		this._runtime = new FastbasicRuntime(fileAccessor);
 
 		// setup event handlers
 		this._runtime.on('stopOnEntry', () => {
-			this.sendEvent(new StoppedEvent('entry', MockDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('entry', FastbasicDebugSession.threadID));
 		});
 		this._runtime.on('stopOnStep', () => {
-			this.sendEvent(new StoppedEvent('step', MockDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('step', FastbasicDebugSession.threadID));
 		});
 		this._runtime.on('stopOnBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('breakpoint', FastbasicDebugSession.threadID));
 		});
 		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
-		});
-		this._runtime.on('output', (type, text, filePath, line, column) => {
-
-			let category: string;
-			switch (type) {
-				case 'prio': category = 'important'; break;
-				case 'out': category = 'stdout'; break;
-				case 'err': category = 'stderr'; break;
-				default: category = 'console'; break;
-			}
-			const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`, category);
-
-			if (text === 'start' || text === 'startCollapsed' || text === 'end') {
-				e.body.group = text;
-				e.body.output = `group-${text}\n`;
-			}
-
-			e.body.source = this.createSource(filePath);
-			e.body.line = this.convertDebuggerLineToClient(line);
-			e.body.column = this.convertDebuggerColumnToClient(column);
-			this.sendEvent(e);
-		});
-		this._runtime.on('end', () => {
-			this.sendEvent(new OutputEvent(`Program completed.\n`, "stdio"));
-			this.sendEvent(new TerminatedEvent());
 		});
 	}
 
@@ -307,18 +153,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
-
-		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-		//logger.log("Unable to compile!", Logger.LogLevel.Stop);
-		/*
-				this.sendErrorResponse(response, {
-					id: 1001,
-					format: `compile error: some fake error.`,//, 
-					showUser: true //args.compileError === 'show' ? true : (args.compileError === 'hide' ? false : undefined)
-				});
-				return;
-		*/
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
@@ -495,7 +329,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			}
 			
 			// Append the debugger code at the end of the listing
-			sourceLines = sourceLines.concat(DEBUGGER_PROGRAM.split("\n"));
+			sourceLines = sourceLines.concat(DEBUG_PROGRAM);
 	
 		} else {
 			// Don't end program until key press in debug mode (even when no breakpoints are added)
@@ -537,7 +371,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// runtime supports no threads so just return a default thread.
 		response.body = {
 			threads: [
-				new Thread(MockDebugSession.threadID, "Main")
+				new Thread(FastbasicDebugSession.threadID, "Main")
 			]
 		};
 		this.sendResponse(response);
@@ -811,7 +645,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	private createSource(filePath: string): Source {
-		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
+		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'fastbasic-debugger');
 	}
 
 	private normalizePathAndCasing(path: string) {
