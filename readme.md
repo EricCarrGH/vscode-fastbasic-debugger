@@ -24,12 +24,12 @@ With the "Run/Debug" split button in the editor header you can easily "run" or "
 
 All variables in FastBasic are global. All variable types are supported:
 
-- Integer: myVar
-- Float: myVar%
-- String: myVar$
-- Arrays (Byte, Integer, String)
+* Integer: myVar
+* Float: myVar%
+* String: myVar$
+* Arrays (Byte, Integer, String)
 
 ## Outline
 
-- The outline view lists all Procedures in the file
-- You can look at the definition of a proc by pressing F12
+* The outline view lists all Procedures in the file
+* You can look at the definition of a proc by pressing F12

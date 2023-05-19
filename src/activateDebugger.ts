@@ -10,9 +10,11 @@ import { FastbasicDebugSession } from './debugger';
 import { FileAccessor } from './runtime';
 
 export let fastBasicChannel: vscode.OutputChannel;
+export let vsContext : vscode.ExtensionContext;
 
 export function activateDebugger(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
 
+	vsContext = context;
 	fastBasicChannel = vscode.window.createOutputChannel("FastBasic");
   
 	context.subscriptions.push(

@@ -156,7 +156,7 @@ export class FastbasicRuntime extends EventEmitter {
 		}
 
 		// Run the program in the emulator
-		cp.execFile(`${emulatorPath}`,["/singleinstance","/run", executable ], (err, stdout) => {
+		cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", executable ], (err, stdout) => {
 			if (err) {
 				fastBasicChannel.appendLine(err.message);//.substring(err.message.indexOf("\n")));
 			}

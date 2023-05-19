@@ -13,19 +13,28 @@
 
 import {
 	LoggingDebugSession,
-	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
+	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent,
 	InvalidatedEvent,
-	Scope, Source, Handles, Breakpoint, MemoryEvent, Thread, StackFrame, ExitedEvent
+	Scope, Source, Handles, Breakpoint, Thread, StackFrame
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
 import { FastbasicRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, IRuntimeVariableType } from './runtime';
 import { Subject } from 'await-notify';
-import { fastBasicChannel } from './activateDebugger';
+import { fastBasicChannel, vsContext } from './activateDebugger';
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import {DEBUG_PROGRAM} from './fastbasicDebugProgram';
+import decompress = require('decompress');
+import decompressUnzip = require('decompress-unzip');
 
+//const UrlFastbasicMac="https://github.com/dmsc/fastbasic/files/11000997/fastbasic-v4.6-31-g5004ef1-dirty-macosx.zip";
+//const UrlFastbasicWin="https://github.com/dmsc/fastbasic/releases/download/v4.6/fastbasic-v4.6-win32.zip";
+const URL_FASTBASIC_MAC="https://ll.carr-designs.com/downloads/fastbasic-v4.6-31-macosx.zip";
+const URL_FASTBASIC_WIN="https://ll.carr-designs.com/downloads/fastbasic-v4.6-win32.zip";
+
+const URL_EMULATOR_MAC="https://ll.carr-designs.com/downloads/Atari800MacX6.0.1.dmg.gz";
+const URL_EMULATOR_WIN="https://ll.carr-designs.com/downloads/Altirra-4.10.zip";
 
 /**
  * This interface describes the fastbasic-debugger specific launch attributes
@@ -151,17 +160,163 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	protected async attachRequest(response: DebugProtocol.AttachResponse, args: IAttachRequestArguments) {
 		return this.launchRequest(response, args);
 	}
+	
+
+	
+	// protected function(url, dest, cb) {
+	// 	var file = fs.createWriteStream(dest);
+	// 	var request = https.get(url, function(response) {
+	// 		response.pipe(file);
+	// 		file.on('finish', function() {
+	// 			file.close(cb);  // close() is async, call cb after close completes.
+	// 		});
+	// 	}).on('error', function(err) { // Handle errors
+	// 		fs.unlink(dest); // Delete the file async. (But we don't check the result)
+	// 		if (cb) cb(err.message);
+	// 	});
+	// }
+ protected async validateDependency(key: string, friendlyName: string,
+	 sourceUrl: string, destFolder:string, currentPath: string, executable: string, autoInstall: boolean) : Promise<string> {
+
+		// Check if args provided path exists
+		if (currentPath.trim().length>0) {
+			if (await this._fileAccessor.doesFileExist(currentPath)) {
+				return currentPath;
+			}
+		}
+		
+		currentPath = String(await vsContext.globalState.get(key) ?? "");
+		if (currentPath.trim().length>0) {
+			if (await this._fileAccessor.doesFileExist(currentPath)) {
+				return currentPath;
+			}
+		}
+
+		let isWindows = 'win32' === process.platform;
+
+		// Offer to install dependency
+		let cancelMessage = "I'll configure it (advanced)";
+		let result = autoInstall ? "go" : await vscode.window.showInformationMessage(
+			`FastBasic/Emulator not configured in launch.json`, 
+			"Download & Install", cancelMessage);
+
+		// User cancelled
+		if (result === cancelMessage || !result) {return "";}
+
+		// Confirm install path
+		let installPath = String(await vsContext.globalState.get("installPath") ?? "");
+
+		if (installPath.length === 0 ) {
+			let textInstall = "Install", textChoose = "Choose Folder";
+			installPath = isWindows ? "c:\\atari" : "~/atari";
+		
+			result = await vscode.window.showInformationMessage(
+				`Will install FastBasic/Emulator folders inside "${installPath}"`,
+				textInstall, textChoose);
+
+			// User cancelled
+			if (!result) {return "";}
+
+			// User wants to choose install path
+			if (result === textChoose) {
+				let newPath = await vscode.window.showOpenDialog({
+					defaultUri: vscode.Uri.file(installPath),
+					openLabel: "Install Here",
+					canSelectFiles: false,
+					canSelectFolders: true,
+					canSelectMany:false
+				});
+				if (newPath && newPath.length>0) {
+					installPath = newPath[0].path;
+				} else {
+					// User cancelled
+					return "";
+				}
+			}
+		}
+
+		installPath = installPath.replace("\\","/");
+		// Remove first / from windows path
+		if (installPath.indexOf(":") > 0 && installPath[0] === "/" ) {
+			installPath = installPath.slice(1);
+		}
+
+		await vsContext.globalState.update('installPath', installPath);
+		
+		installPath += "/" + destFolder;
+		await vscode.workspace.fs.createDirectory(vscode.Uri.file(installPath));
+		let zipPath = installPath+ "/" + destFolder+"-download.zip";
+		
+		var res = await fetch(new URL(sourceUrl));
+		if (res.status !== 200) {
+			return "";
+		}
+		let buf = await (await res.blob()).arrayBuffer();
+		await vscode.workspace.fs.writeFile(vscode.Uri.file(zipPath), new Uint8Array(buf));
+		await decompress(zipPath, installPath, {
+			plugins: [
+					decompressUnzip()
+				]
+		});
+
+		currentPath = installPath + "/" + executable +  (isWindows ? ".exe" : "");
+
+		// Check if downloaded compiler exists
+		if (await this._fileAccessor.doesFileExist(currentPath)) {
+			await vsContext.globalState.update(key, currentPath);
+		return currentPath;
+		}
+
+		return "";
+	}
 
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
+		let isWindows = 'win32' === process.platform;
 
 		if (args.sourceFile.toLocaleLowerCase().endsWith(".json")) {
 			this.sendEvent(new TerminatedEvent());
 			return undefined;
 		}
+		await vsContext.globalState.update('installPath', "");
+
+		let compilerPath = await this.validateDependency(
+			"compilerPath",
+			"FastBasic Compiler",
+			isWindows ? URL_FASTBASIC_WIN : URL_FASTBASIC_MAC,
+			"fastbasic",
+			args.compilerPath,
+			"fastbasic",
+			false );
+
+		if (compilerPath==="") {
+			response.success = false;
+			response.message = "Could not locate FastBasic compiler. Re-install or check the compilerPath in launch.json.";
+			this.sendResponse(response);
+			return undefined;
+		}
+
+		let emulatorPath = await this.validateDependency(
+			"emulatorPath",
+			(isWindows ? "Altirra" : "Atari800MacX" ) + " Emulator",
+			isWindows ? URL_EMULATOR_WIN : URL_EMULATOR_MAC,
+			isWindows ? "Altirra" : "Atari800MacX",
+			args.emulatorPath,
+			isWindows ? "altirra64" : "atari800macx",
+			true
+			);
+
+		if (emulatorPath==="") {
+			response.success = false;
+			response.message = "Could not find Atari Emulator. Re-install or check the emulatorPath in launch.json.";
+			this.sendResponse(response);
+			return undefined;
+		}
+	
+
 		// Create a bin folder to hold compiled/symbol files
-		let isWindows = 'win32' === process.platform;
+		
 		var folderDelimiter = isWindows ? "\\" : "/";
 		let file = args.sourceFile;
 		let fileParts = file.split(folderDelimiter);
@@ -187,14 +342,6 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	
 		let lineCount = await this.injectDebuggerCode(binFolder + folderDelimiter + filename, breakpoints, Boolean(args.noDebug) );
 		
-		// Check if the compiler exists
-		if (!await this._fileAccessor.doesFileExist(args.compilerPath)) {
-			response.success = false;
-			response.message = "Could not find FastBasic compiler. Check the compilerPath in launch.json.";
-			this.sendResponse(response);
-			return undefined;
-		}
-
 		// run the fastbasic compiler
 		fastBasicChannel.clear();
 		fastBasicChannel.show(true);
@@ -204,8 +351,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		//this.sendEvent(new OutputEvent(`Compiling ${filename} using FastBasic Compiler..\n`, "stdio"));
 
 		let wroteError = false;
-		//cp.execFile(`${args.compilerPath}`, ["-n",filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
-			cp.execFile(`${args.compilerPath}`, [filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
+			cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
 			if (err) {
 
 				// Strip the first two lines as they do not add value, unless they are unexpected
@@ -271,17 +417,12 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			return undefined;	// abort launch
 		}
 
-		if (!this._fileAccessor.doesFileExist(args.emulatorPath)) {
-			response.success = false;
-			response.message = "Could not find Atari Emulator. Check the emulatorPath in launch.json.";
-			this.sendResponse(response);
-			return undefined;
-		}
+
 
 		// Don't bother starting debugging if there are no breakpoints
 		if (breakpoints.length === 0) {
 			// Run the program in the emulator
-			cp.execFile(`${args.emulatorPath}`,["/singleinstance","/run", atariExecutable ], (err, stdout) => {
+			cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", atariExecutable ], (err, stdout) => {
 				if (err) {
 					fastBasicChannel.appendLine(err.message);
 				}
@@ -291,7 +432,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		 return undefined;
 		}
 		// start the program in the runtime
-		await this._runtime.start(file, !args.noDebug, args.emulatorPath, atariExecutable);
+		await this._runtime.start(file, !args.noDebug, emulatorPath, atariExecutable);
 		this.sendResponse(response);
 	}
 

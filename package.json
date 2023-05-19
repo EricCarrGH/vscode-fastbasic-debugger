@@ -4,9 +4,7 @@
   "version": "0.2.0",
   "publisher": "carr-designs",
   "description": "Runs FastBasic automatically on an emulator, providing debugging support to set breakpoints, step through code, view and change variables.",
-  "author": {
-    "name": "Eric Carr"
-  },
+  "author": "Eric Carr",
   "license": "MIT",
   "keywords": [
     "multi-root ready"
@@ -19,10 +17,7 @@
     "Debuggers"
   ],
   "private": true,
-  "repository": {
-    "type": "git",
-    "url": "https://todo.git"
-  },
+  "repository": "https://todo.git",
   "bugs": {
     "url": "https://todo/issues"
   },
@@ -142,7 +137,9 @@
         "configurationAttributes": {
           "launch": {
             "required": [
-              "sourceFile","compilerPath","emulatorPath"
+              "sourceFile",
+              "compilerPath",
+              "emulatorPath"
             ],
             "properties": {
               "sourceFile": {
@@ -158,12 +155,12 @@
               "compilerPath": {
                 "type": "string",
                 "description": "Full path to the FastBasic compiler.",
-                "default":"E.G. c:/fastbasic/fastbasic.exe"
+                "default": "E.G. c:/fastbasic/fastbasic.exe"
               },
               "emulatorPath": {
                 "type": "string",
                 "description": "Full path to the Atari Emulator.",
-                "default":"E.G. C:/atari/Altirra/Altirra64.exe"
+                "default": "E.G. C:/atari/Altirra/Altirra64.exe"
               }
             }
           }
@@ -198,5 +195,8 @@
         }
       }
     ]
+  },
+  "dependencies": {
+    "decompress": "^4.2.1"
   }
 }
