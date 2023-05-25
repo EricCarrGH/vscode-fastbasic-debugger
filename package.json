@@ -70,6 +70,29 @@
     "request": "never"
   },
   "contributes": {
+    "languages": [
+			{
+				"id": "basic",
+				"aliases": [
+					"Atari FastBasic",
+					"FastBasic",
+					"basic"
+				],
+				"extensions": [
+					".bas",
+					".fb",
+          ".lst"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "basic",
+				"scopeName": "source.basic",
+				"path": "./syntaxes/basic.tmLanguage.json"
+			}
+		],
     "menus": {
       "editor/title/run": [
         {

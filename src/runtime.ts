@@ -320,7 +320,7 @@ export class FastbasicRuntime extends EventEmitter {
 			this._sourceFile = file;
 			
 			let ext  = file.split(".").splice(-1)[0].toLowerCase();
-			if (ext !== "bas" && ext !== "lst") {
+			if (ext !== "bas" && ext !== "lst" && ext !== "fb") {
 				return;
 			}
 

@@ -114,6 +114,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		if (args.supportsInvalidatedEvent) {
 			this._useInvalidatedEvent = true;
 		}
+		
 
 		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};
@@ -161,20 +162,6 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		return this.launchRequest(response, args);
 	}
 	
-
-	
-	// protected function(url, dest, cb) {
-	// 	var file = fs.createWriteStream(dest);
-	// 	var request = https.get(url, function(response) {
-	// 		response.pipe(file);
-	// 		file.on('finish', function() {
-	// 			file.close(cb);  // close() is async, call cb after close completes.
-	// 		});
-	// 	}).on('error', function(err) { // Handle errors
-	// 		fs.unlink(dest); // Delete the file async. (But we don't check the result)
-	// 		if (cb) cb(err.message);
-	// 	});
-	// }
  protected async validateDependency(key: string, friendlyName: string,
 	 sourceUrl: string, destFolder:string, currentPath: string, executable: string, autoInstall: boolean) : Promise<string> {
 
@@ -345,10 +332,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		// run the fastbasic compiler
 		fastBasicChannel.clear();
 		fastBasicChannel.show(true);
-		fastBasicChannel.appendLine(`Compiling ${filename} using FastBasic Compiler..`);
-
-		
-		//this.sendEvent(new OutputEvent(`Compiling ${filename} using FastBasic Compiler..\n`, "stdio"));
+		fastBasicChannel.appendLine(`Compiling ${filename}..`);
 
 		let wroteError = false;
 			cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + '/' }, (err, stdout) => {
@@ -418,12 +402,12 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		}
 
 
-		fastBasicChannel.appendLine(`Compiled successfully - running in emulator..`);
+		fastBasicChannel.appendLine(`Running in emulator..`);
 
 		// Don't bother starting debugging if there are no breakpoints
 		if (breakpoints.length === 0 || args.noDebug) {
 			// Run the program in the emulator
-			cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", `"${atariExecutable.split("/").join("\\")}"` ], (err, stdout) => {
+			cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", atariExecutable.split("/").join("\\") ], (err, stdout) => {
 				if (err) {
 					fastBasicChannel.appendLine(err.message);
 				}
