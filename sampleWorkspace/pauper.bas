@@ -29,11 +29,11 @@ poke 559,0
 data _p2c()B.=0,14,0:data _p3c()B.=0,24,0
 dlis._=72i.$d409,_p2c i.$D014,_p3c i.$D015:dl._
 
-i=dpeek 560
-poke i,0      ' Move entire screen up 8 lines to center it
-POKE i+3, peek(i + 3) +128 +2' Set DLI to set custom charset and hide PMG
-POKE i+6, $85  ' Set DLI on next line to show PMG
-poke i+15,$85  ' Final DLI at bottom of screen to again hide PMG
+i=dpeek 560+3
+dpoke i-3, 96       ' Move entire screen up 7 lines to center it
+POKE i, peek i+130' Set DLI to set custom charset and hide PMG
+POKE i+3, $85  ' Set DLI on next line to show PMG
+poke i+12,$85  ' Final DLI at bottom of screen to again hide PMG
 
 ' Create flipped PMG sprite
 _SPRITES=17
@@ -54,7 +54,7 @@ move $4800+24*8,$4800+49*8,8
 pmg.2
 mset pm.2,256,0
 
-poke 704,0'$48
+poke 704,$48
 
 ' Set priority,overlap mode for 3 color pmg, missles own color
 P.623,56
@@ -101,6 +101,7 @@ DA.B.     ="##%---!,$#####%)$########&$######%!--!-+--!) $#######%-+############
 DA.B.     ="##& (-!-!)$####&$########&$######%!-') $###& $#############################################",
 DA.B.     ="##& $####%!!''!-!--'!!-'!)  $######%!) $###&  $############################################",
 DA.B.     ="##%-+####################%--+########%-!!-!---+############################################"
+
 _room=&_qq+60'_mapW*3
 
 ' Character position
@@ -128,13 +129,13 @@ proc r
     h=&_f+272+k*12
     j=_scr+i*4+(i/10)*80-40
 
-    if i>9
+    IF i>9
       for k=0 to 8 step 4
         move h+k,j+10*k,4
       n.
     else
       for k=8to11:p.j+72+k,p.(h+k)+80:n.
-    e.
+    endif
     
   next i
 
@@ -183,7 +184,10 @@ if _canMove
         _playerFrame=37
         _yDelta=-1  
         _jumping=1
+        _direction=sgn(_xDelta)
+        _rowJumpModifier=_mapW
     else
+      _rowJumpModifier=0
       ' Jump straight up
       h=peek(_room+i)
       ' Can climb at end of jump
@@ -227,7 +231,11 @@ if _xDelta
   k=(_x&255-20+_xDelta)/16
   
   if k<>_col 
-    i=(_y-4)/24*_mapW+k
+    i=_y-4
+    'if _jumping and not _ydelta 
+      'i=i+5
+    'endif
+    i=i/24*_mapW+k+_rowJumpModifier
     h=peek(_room+i)
     'pos.10,0:?#6,chr$(h); " ";h;" "
    
@@ -235,7 +243,7 @@ if _xDelta
        _xDelta=0
     else       
       _col=k
-      j=_row
+      j=_row+_rowJumpModifier
 
       ' Check if falling off edge
       if _canMove
@@ -254,15 +262,18 @@ if _xDelta
       e.
       
       if k>10 or (h<>1 and h<>11 and h<>4) :dec k:dec i: h=peek(_room+i):e.
+
+      ' Update mask
       if h=1 or h=11 or h=4
         if _lastMask<>k
           j=j/_mapW*24+4
+          
           _lastMask=k
           _height=24
           if _yDelta=2
             while h=1 or h=11 or h=4
-            _height=_height+20
-            i=i+_mapW:h=peek(_room+i)
+              _height=_height+20
+              i=i+_mapW:h=peek(_room+i)
             wend
             _height=_height-20
             if j+_height>128 then _height=128-j
@@ -303,6 +314,7 @@ if _yDelta
   if i<>_row 
   'get k
     _row=i
+    if _yDelta>0 then _rowJumpModifier=0
     
     i=i+_col
     '_col=-1

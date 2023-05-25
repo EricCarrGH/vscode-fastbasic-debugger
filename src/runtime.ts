@@ -143,20 +143,68 @@ export class FastbasicRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, debug: boolean, emulatorPath: string, executable: string): Promise<void> {
+	public async start(program: string, emulatorPath: string, executable: string): Promise<void> {
  
-		fastBasicChannel.appendLine(`Compiled successfully - running in emulator..`);
+		//let isWindows = 'win32' === process.platform;
 
-		// Load and parse the symbols if debugging
-		if (debug) {
-			// Load the source, which creates the memory dump file
-			await this.loadSource(program);
-			// Send initial message to start communication with the program before launching it
-			await this.sendMessageToProgram(MessageCommand.continue);
-		}
+		// Load the source, which creates the memory dump file
+		await this.loadSource(program);
 
-		// Run the program in the emulator
-		cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", executable ], (err, stdout) => {
+		// Send initial message to start communication with the program before launching it
+		await this.sendMessageToProgram(MessageCommand.continue);
+	
+		// Build the emulator H: drive location
+		let pathParts = executable.split('/');
+		pathParts[pathParts.length-1] = "";
+		let binLocation = pathParts.join('/');
+		
+		// Build the emulator settings file path
+		pathParts = emulatorPath.split('/');
+		pathParts[pathParts.length-1] = "Altirra.ini";
+		let iniPath = pathParts.join('/');
+
+		/* If settings file does not exist, create base settings file with settings that work well for debugging:
+		- Setup H: device under path4
+		- Direct3D 9 so resize does not cause issues
+		- Auto enable Joystick for arrow keys
+		- Disable confirmation on close
+		- Disable pause when inactive
+		*/
+		if (! await this.fileAccessor.doesFileExist(iniPath)) {
+			let defaultIniContents = new TextEncoder().encode(`
+[User\\Software\\virtualdub.org\\Altirra\\Settings]
+"Display: Direct3D9" = 1
+"Display: 3D" = 0
+"Startup: Reuse program instance" = 1
+
+[User\\Software\\virtualdub.org\\Altirra\\Profiles\\00000000]
+"Devices" = "[{\\"tag\\": \\"hostfs\\",\\"params\\": {\\"readonly\\": false,\\"path4\\": \\"${binLocation}\\"}}]"
+"Devices: CIO H: patch enabled" = 1		
+"Pause when inactive" = 0
+"Input: Active map names" = "Arrow Keys -> Joystick (port 1)"
+
+[User\\Software\\virtualdub.org\\Altirra\\DialogDefaults]
+"DiscardMemory" = "ok"
+	`);
+
+			await this.fileAccessor.writeFile(iniPath, defaultIniContents);
+			await new Promise(resolve => setTimeout(resolve, 100));
+		} else {
+
+		// File exists, so update the path4 location
+		let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(iniPath));
+	  existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
+			return g1+binLocation+g3;
+		});
+
+		await this.fileAccessor.writeFile(iniPath, new TextEncoder().encode(existingSettingsFile));
+			await new Promise(resolve => setTimeout(resolve, 100));
+
+
+	}
+
+
+		cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", executable.split("/").join("\\") ], (err, stdout) => {
 			if (err) {
 				fastBasicChannel.appendLine(err.message);//.substring(err.message.indexOf("\n")));
 			}

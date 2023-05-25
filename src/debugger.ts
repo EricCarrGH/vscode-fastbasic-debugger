@@ -317,30 +317,30 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		// Create a bin folder to hold compiled/symbol files
 		
-		var folderDelimiter = isWindows ? "\\" : "/";
-		let file = args.sourceFile;
-		let fileParts = file.split(folderDelimiter);
+		
+		let file = args.sourceFile.split('\\').join('/');
+		let fileParts = file.split('/');
 		let filename = fileParts[fileParts.length - 1];
 		let filenameNoExt = filename.split(".")[0] + ".";
 		fileParts[fileParts.length - 1] = "bin";
-		let binFolder = fileParts.join(folderDelimiter);
+		let binFolder = fileParts.join('/');
 		await vscode.workspace.fs.createDirectory(vscode.Uri.file(binFolder));
 
 		// Delete existing files for this source file
 		var files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(binFolder));
 		for (let i = 0; i < files.length; i++) {
 			if (files[i][0].startsWith(filenameNoExt)) {
-				await vscode.workspace.fs.delete(vscode.Uri.file(binFolder + folderDelimiter + files[i][0]), { useTrash: false });
+				await vscode.workspace.fs.delete(vscode.Uri.file(binFolder + '/' + files[i][0]), { useTrash: false });
 			}
 		};
 
 		// Copy the source file to the bin folder 
-		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder + folderDelimiter + filename));
+		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder + '/' + filename));
 
 		// Inject debugger code into the bin source file copy
 		const breakpoints = this._runtime.breakPoints.get(this.normalizePathAndCasing(file)) ?? new Array<IRuntimeBreakpoint>();
 	
-		let lineCount = await this.injectDebuggerCode(binFolder + folderDelimiter + filename, breakpoints, Boolean(args.noDebug) );
+		let lineCount = await this.injectDebuggerCode(binFolder + '/' + filename, breakpoints, Boolean(args.noDebug) );
 		
 		// run the fastbasic compiler
 		fastBasicChannel.clear();
@@ -351,7 +351,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		//this.sendEvent(new OutputEvent(`Compiling ${filename} using FastBasic Compiler..\n`, "stdio"));
 
 		let wroteError = false;
-			cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + folderDelimiter }, (err, stdout) => {
+			cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + '/' }, (err, stdout) => {
 			if (err) {
 
 				// Strip the first two lines as they do not add value, unless they are unexpected
@@ -399,7 +399,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			return undefined;
 		}
 		// Wait until the XEX file is created
-		let atariExecutable = binFolder + folderDelimiter + filenameNoExt + "xex";
+		let atariExecutable = binFolder + '/' + filenameNoExt + "xex";
 		if (!wroteError) {
 			await this._fileAccessor.waitUntilFileExists(atariExecutable, 10000);
 		}
@@ -418,11 +418,12 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		}
 
 
+		fastBasicChannel.appendLine(`Compiled successfully - running in emulator..`);
 
 		// Don't bother starting debugging if there are no breakpoints
-		if (breakpoints.length === 0) {
+		if (breakpoints.length === 0 || args.noDebug) {
 			// Run the program in the emulator
-			cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", atariExecutable ], (err, stdout) => {
+			cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", `"${atariExecutable.split("/").join("\\")}"` ], (err, stdout) => {
 				if (err) {
 					fastBasicChannel.appendLine(err.message);
 				}
@@ -432,7 +433,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		 return undefined;
 		}
 		// start the program in the runtime
-		await this._runtime.start(file, !args.noDebug, emulatorPath, atariExecutable);
+		await this._runtime.start(file, emulatorPath, atariExecutable);
 		this.sendResponse(response);
 	}
 
@@ -764,7 +765,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			} else {
 				v.value="uninitialized";
 			}
-			
+			v.presentationHint = v.presentationHint ?? {kind: "property"};
 			response.body = {
 				result: v.value,
 				type: v.type,

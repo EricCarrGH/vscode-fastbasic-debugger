@@ -1,12 +1,40 @@
 {
-  "workbench.colorTheme": "Default Dark Modern",
-  //"editor.fontFamily": "Atari Classic Chunky",
+  //"workbench.colorTheme": "Default Dark Modern",
+  "editor.fontFamily": "Atari Classic Chunky",
   "editor.fontSize": 12,
-  //"editor.cursorStyle": "block",
+  "editor.cursorStyle": "block",
+  "editor.cursorBlinking": "solid",
   //"debug.console.closeOnEnd": false,
   //"debug.console.fontFamily": "Atari Classic Chunky",
   //"debug.openDebug": "openOnSessionStart",
   "debug.toolBarLocation": "docked",
-  "debug.showInlineBreakpointCandidates": "false"
-
+  "debug.showInlineBreakpointCandidates": false,
+  "workbench.colorCustomizations": {
+    
+    "sideBar.background": "#013659",
+    "sideBar.foreground": "#bed9e7",
+    "editor.background": "#013d65",
+    "editor.foreground": "#62aad0",
+    "sideBarSectionHeader.background": "#004472",
+    "sideBarSectionHeader.foreground": "#62aad0",
+    "statusBar.background": "#102F97",
+    "scrollbarSlider.activeBackground": "#62aad0",
+    "scrollbarSlider.hoverBackground": "#62aad0",
+    "activityBar.background": "#01263f",
+    "breadcrumb.background": "#01263f",
+    "editor.selectionBackground":  "#01263f",
+    "editorLineNumber.foreground":  "#62aad0",
+    "editorCursor.foreground":  "#62aad0",
+    "editorCursor.background":  "#004472",
+    "debugIcon.breakpointForeground": "#ff7b00",
+    "editorLineNumber.activeForeground":"#bed9e7",
+    "editor.lineHighlightBackground": "#ffffff10",
+    "editorHoverWidget.background": "#000000",
+    "editorHoverWidget.foreground": "#eeeeff",
+    "editorHoverWidget.border": "#000000",
+    "menu.foreground": "#bed9e7",
+    "menu.background": "#01263f",
+    "editor.wordHighlightBackground": "#00000000", 
+    
+  }
 }

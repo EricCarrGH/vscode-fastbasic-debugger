@@ -44,6 +44,7 @@ class FastBasicSymbolProvider implements vscode.DocumentSymbolProvider {
 	public provideDocumentSymbols(
 			document: vscode.TextDocument,
 			token: vscode.CancellationToken): Promise<vscode.DocumentSymbol[]> {
+			symbols = [];
 			return new Promise((resolve, reject) => {
 					for (var i = 0; i < document.lineCount; i++) {
 							var line = document.lineAt(i);
