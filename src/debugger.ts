@@ -31,7 +31,7 @@ import decompressUnzip = require('decompress-unzip');
 //const UrlFastbasicMac="https://github.com/dmsc/fastbasic/files/11000997/fastbasic-v4.6-31-g5004ef1-dirty-macosx.zip";
 //const UrlFastbasicWin="https://github.com/dmsc/fastbasic/releases/download/v4.6/fastbasic-v4.6-win32.zip";
 const URL_FASTBASIC_MAC="https://ll.carr-designs.com/downloads/fastbasic-v4.6-31-macosx.zip";
-const URL_FASTBASIC_WIN="https://ll.carr-designs.com/downloads/fastbasic-v4.6-win32.zip";
+const URL_FASTBASIC_WIN="https://ll.carr-designs.com/downloads/fastbasic-v4.6-31-win32.zip";
 
 const URL_EMULATOR_MAC="https://ll.carr-designs.com/downloads/Atari800MacX6.0.1.dmg.gz";
 const URL_EMULATOR_WIN="https://ll.carr-designs.com/downloads/Altirra-4.10.zip";
@@ -122,6 +122,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		// the adapter implements the configurationDone request.
 		response.body.supportsConfigurationDoneRequest = true;
 
+		response.body.supportsValueFormattingOptions = true;
+		
 		// make VS Code use 'evaluate' when hovering over source
 		response.body.supportsEvaluateForHovers = true;
 	
@@ -327,7 +329,9 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		// Inject debugger code into the bin source file copy
 		const breakpoints = this._runtime.breakPoints.get(this.normalizePathAndCasing(file)) ?? new Array<IRuntimeBreakpoint>();
 	
-		let lineCount = await this.injectDebuggerCode(binFolder + '/' + filename, breakpoints, Boolean(args.noDebug) );
+		let noDebug = Boolean(args.noDebug) || breakpoints.length===0;
+
+		let lineCount = await this.injectDebuggerCode(binFolder + '/' + filename, breakpoints, Boolean(args.noDebug)  );
 		
 		// run the fastbasic compiler
 		fastBasicChannel.clear();
@@ -349,20 +353,22 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 				// Remove debugging code from error output
 				let errorMessage = error.join("\n");
-				let line = 1, column = 1;
-				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+):(\d+):/gi, (s, ext, row, col) => {
-					column = col - (row > 1 ? 15 : 30);
-					line = row;
-					return `.${ext}:${row}:${column}: `;
-				});
+				if (!noDebug) {
+					let line = 1, column = 1;
+					errorMessage = errorMessage.replace(/\.(bas|lst):(\d+):(\d+):/gi, (s, ext, row, col) => {
+						column = col - (row > 1 ? 16 : 31);
+						line = row;
+						return `.${ext}:${row}:${column}: `;
+					});
 
-				errorMessage = errorMessage.replace(/\.(bas|lst):(\d+): /gi, (s, ext, row) => {
-					line = Math.min(row, lineCount);
-					return `.${ext}:${line}: `;
-				});
+					errorMessage = errorMessage.replace(/\.(bas|lst):(\d+): /gi, (s, ext, row) => {
+						line = Math.min(row, lineCount);
+						return `.${ext}:${line}: `;
+					});
 
-				errorMessage = errorMessage.replace(/@___DEBUG_CB \d+:/gi, "");
-				errorMessage = errorMessage.replace("@___DEBUG_POLL:", "");
+					errorMessage = errorMessage.replace("@___DEBUG_CHECK:", "");
+					errorMessage = errorMessage.replace("@___DEBUG_POLL:", "");
+				}
 
 				wroteError = errorMessage.length > 0;
 				fastBasicChannel.appendLine("\n" + errorMessage);
@@ -405,7 +411,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		fastBasicChannel.appendLine(`Running in emulator..`);
 
 		// Don't bother starting debugging if there are no breakpoints
-		if (breakpoints.length === 0 || args.noDebug) {
+		if (noDebug) {
 			// Run the program in the emulator
 			cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", atariExecutable.split("/").join("\\") ], (err, stdout) => {
 				if (err) {
@@ -434,7 +440,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		if (breakpoints.length > 0) {
 			
-			sourceLines[0] = "@___DEBUG_POLL:" + sourceLines[0];
+			sourceLines[0] = "@___DEBUG_POLL:@___DEBUG_CHECK:" + sourceLines[0];
 		
 			for (i = 1; i < sourceLines.length; i++) {
 
@@ -749,18 +755,19 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			} else {
 				v.value="uninitialized";
 			}
-			v.presentationHint = v.presentationHint ?? {kind: "property"};
+			v.presentationHint = v.presentationHint ?? {};
+			if (!v.presentationHint.kind) {
+				v.presentationHint.kind ="data";
+				v.presentationHint.visibility = "public";
+			}
 			response.body = {
 				result: v.value,
 				type: v.type,
-				variablesReference: v.variablesReference,
+				variablesReference: v.variablesReference >0 ? v.variablesReference : 1,
 				presentationHint: v.presentationHint
 			};
 		} else {
-			response.body = {
-				result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,
-				variablesReference: 0
-			};
+			response.success = false;
 		}
 
 		this.sendResponse(response);

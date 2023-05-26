@@ -70,6 +70,13 @@
     "request": "never"
   },
   "contributes": {
+    "themes": [
+      {
+        "label": "FastBasic Atari",
+        "uiTheme": "vs-dark",
+        "path": "./themes/fastbasic-atari-theme.json"
+      }
+    ],
     "languages": [
 			{
 				"id": "basic",

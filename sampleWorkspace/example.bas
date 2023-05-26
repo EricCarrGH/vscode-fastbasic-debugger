@@ -1,0 +1,6 @@
+F=45 
+X=2
+
+GET SDF
+IF X=1 THEN INC X
+

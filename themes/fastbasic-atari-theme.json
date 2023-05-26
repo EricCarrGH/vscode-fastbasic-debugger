@@ -1,0 +1,95 @@
+{
+	"name": "FastBasic Atari",
+	"colors": {  
+		"editor.background": "#00489d",
+		"editor.foreground": "#75b8ff",
+		"back": "60aeff eeffff",
+    "tab.activeBackground": "#00489d",
+    "tab.activeForeground": "#bed9e7",
+    "tab.hoverBackground": "#01263f",
+    "tab.activeBorder": "#013d65",
+ 
+		"debugTokenExpression.value": "#aaaabb",
+		"debugTokenExpression.number": "#ffffff",
+	 	"debugTokenExpression.string": "#ede182",
+	 	"debugTokenExpression.name": "#bed9e7",
+
+    "activityBar.background": "#00326b",
+    
+		"panel.background": "#000000",
+
+    "sideBar.background": "#001a38",
+    "sideBar.foreground": "#bed9e7",
+    "sideBarSectionHeader.foreground": "#8fc5ff",
+    "sideBarSectionHeader.background": "#00489d",
+
+    "editor.wordHighlightBackground": "#00000000", 
+    "editor.lineHighlightBackground": "#ffffff10",
+    "editor.selectionBackground":  "#ffffff",
+    "editorLineNumber.foreground":  "#75b8ff",
+    
+    "editorCursor.foreground":  "#75b8ff",
+    "editorCursor.background":  "#00489d",
+    
+    "editorHoverWidget.background": "#001a38",
+    "editorHoverWidget.foreground": "#bed9e7",
+    "editorHoverWidget.border": "#000000",
+   
+    "editorLineNumber.activeForeground":"#bed9e7",
+   
+    "statusBar.background": "#013d65",
+    "scrollbarSlider.activeBackground": "#62aad0",
+    "scrollbarSlider.hoverBackground": "#62aad0",
+   
+    "debugIcon.breakpointForeground": "#ff7b00"
+	},
+	"tokenColors": [
+		{
+			"name": "Comment",
+			"scope": [
+				"comment",
+				"punctuation.definition.comment"
+			],
+			"settings": {
+				"foreground": "#6aa081"
+			}
+		},
+		{
+			"name": "Function, Special Method",
+			"scope": [
+				"entity.name.function",
+				"meta.function-call",
+				"variable.function",
+				"support.function",
+				"keyword.other.special-method"
+			],
+			"settings": {
+				"foreground": "#9f83eb"
+			}
+		},
+		{
+			"name": "Block Level Variables",
+			"scope": [
+				"meta.block variable.other"
+			],
+			"settings": {
+				"foreground": "#f07178"
+			}
+		},
+		{
+			"name": "String, Symbols, Inherited Class, Markup Heading",
+			"scope": [
+				"string",
+				"constant.other.symbol",
+				"constant.other.key",
+				"entity.other.inherited-class",
+				"markup.heading",
+				"markup.inserted.git_gutter",
+				"meta.group.braces.curly constant.other.object.key.js string.unquoted.label.js"
+			],
+			"settings": {
+				"foreground": "#d4cd9f"
+			}
+		}
+	]
+}

@@ -17,7 +17,7 @@ serverEndpoint$=""
 query$=""
 @NReadAppKey AK_CREATOR_ID, AK_APP_ID, AK_KEY_SERVER, &serverEndpoint$
 
-if serverEndpoint$<>""
+IF serverEndpoint$<>""
   for i=1 to len(serverEndpoint$)
     if serverEndpoint$[i,1]="?"
       query$=serverEndpoint$[i]
@@ -25,18 +25,18 @@ if serverEndpoint$<>""
       exit
     endif
   next
-else
+ELSE
   ' For local testing
   serverEndpoint$="https://5card.carr-designs.com/"
   query$="?table=eric&count=3"
-endif
+ENDIF
 
 
 ' Silence the loud SIO noise
-poke 65,0
+POKE 65,0
 
 
-dim responseBuffer(1023) BYTE
+DIM responseBuffer(1023) BYTE
 
 ' Align screenBuffer at 4096 boundary (and charBuffer at 1024 boundary afterward)
 i = (&responseBuffer+1024) mod 4096

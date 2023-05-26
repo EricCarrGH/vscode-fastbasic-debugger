@@ -581,7 +581,7 @@ export class FastbasicRuntime extends EventEmitter {
 			[debugFileResponse[1], debugFileResponse[2]] = [debugFileResponse[2], debugFileResponse[1]];
 
 			let address = Number(this.getAtariValue(debugFileResponse, 1, VAR_WORD))-3;
-			let currentLine = this._addressToLineMap.get(address) ?? 0;
+			let currentLine = this._addressToLineMap.get(address) ?? 1;
 			let varIndex = 0;
 			let startingLoc = this._varMinLoc - 3;
 			let heapIndex = this._varMemSize + 3;

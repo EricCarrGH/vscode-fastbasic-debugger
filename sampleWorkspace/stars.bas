@@ -26,7 +26,7 @@ if _lives
   pause 60
 else
   ?#6,"Star Runner",,,,"press FIRE"
-e.
+endif
 
 ' Wait for joystick button press
 W.P.644:@m:pause 2:WE.

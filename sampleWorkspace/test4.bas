@@ -4,7 +4,7 @@ f1=&sf$+1
 t1=&st$+1
 timer
 t=time
-FOR i=1 to 1000
+FOR i=1 to 1w000
 move f1,t1,3
 next
 t=time-t

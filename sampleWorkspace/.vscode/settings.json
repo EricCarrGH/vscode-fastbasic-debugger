@@ -1,60 +1,27 @@
 {
-  //"workbench.colorTheme": "Default Dark Modern",
+  "workbench.colorTheme": "FastBasic Atari",
   "editor.fontFamily": "Atari Classic Chunky",
-  "editor.fontSize": 12,
+  "editor.fontSize": 14,
   "editor.cursorStyle": "block",
   "editor.cursorBlinking": "solid",
   "breadcrumbs.enabled": false,
-
+  "editor.inlayHints.enabled": "off",
   "debug.confirmOnExit": "never",
-  
+  "debug.enableStatusBarColor": true,
+  "debug.focusEditorOnBreak": true,
+  "editor.autoClosingQuotes": "never",
   //"debug.console.closeOnEnd": false,
   //"debug.console.fontFamily": "Atari Classic Chunky",
   //"debug.openDebug": "openOnSessionStart",
-  "debug.toolBarLocation": "docked",
-  "debug.showInlineBreakpointCandidates": false,
+  //"debug.toolBarLocation": "docked",
+  //"debug.showInlineBreakpointCandidates": false,
   "workbench.colorCustomizations": {
   
-    "tab.activeBackground": "#013d65",
-    "tab.activeForeground": "#bed9e7",
-    "tab.hoverBackground": "#01263f",
-    "tab.activeBorderTop": "#013d65",
  
-    
-    "activityBar.background": "#011e31",
-    
-    "sideBar.background": "#01263f",
-    "sideBar.foreground": "#bed9e7",
-    "sideBarSectionHeader.foreground": "#62aad0",
-    "sideBarSectionHeader.background": "#004472",
-
-  
-    "editor.background": "#013d65",
-    "editor.foreground": "#62aad0",
-    "editor.wordHighlightBackground": "#00000000", 
-    "editor.lineHighlightBackground": "#ffffff10",
-    "editor.selectionBackground":  "#ffffff",
-    "editorLineNumber.foreground":  "#62aad0",
-    
-    "editorCursor.foreground":  "#62aad0",
-    "editorCursor.background":  "#004472",
-    
-    "editorHoverWidget.background": "#000000",
-    "editorHoverWidget.foreground": "#eeeeff",
-    "editorHoverWidget.border": "#000000",
-   
-    "editorLineNumber.activeForeground":"#bed9e7",
-   
-    "statusBar.background": "#013d65",
-    "scrollbarSlider.activeBackground": "#62aad0",
-    "scrollbarSlider.hoverBackground": "#62aad0",
-   
-   
-    "debugIcon.breakpointForeground": "#ff7b00",
    
   //  "menu.foreground": "#76b0ce",
    // "menu.background": "#043150",
    
-    
+ 
   }
 }
