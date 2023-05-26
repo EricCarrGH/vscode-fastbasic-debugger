@@ -5,6 +5,9 @@
 import { EventEmitter } from 'events';
 import { fastBasicChannel } from './activateDebugger';
 import * as cp from 'child_process';
+import util = require('util');
+const exec = util.promisify(require('child_process').exec);
+import { GetEmulatorSettingsMac, GetEmulatorSettingsWin } from './emulatorSettingsFiles';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -140,28 +143,43 @@ export class FastbasicRuntime extends EventEmitter {
 		super();
 	}
 
+	public async startEmulator(command:string) : Promise<void> {
+		if ('win32' !== process.platform) {
+			await exec(`osascript -e 'quit app "Atari800MacX"'`);
+		}
+		exec(command);
+	}
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, emulatorPath: string, executable: string): Promise<void> {
+	public async start(program: string, noDebug: boolean, emulatorPath: string, executable: string): Promise<void> {
  
-		//let isWindows = 'win32' === process.platform;
+		let isWindows = 'win32' === process.platform;
 
-		// Load the source, which creates the memory dump file
-		await this.loadSource(program);
+		if (!noDebug) {
+			// Load the source, which creates the memory dump file
+			await this.loadSource(program);
 
-		// Send initial message to start communication with the program before launching it
-		await this.sendMessageToProgram(MessageCommand.continue);
-	
+			// Send initial message to start communication with the program before launching it
+			await this.sendMessageToProgram(MessageCommand.continue);
+		}
+
 		// Build the emulator H: drive location
 		let pathParts = executable.split('/');
 		pathParts[pathParts.length-1] = "";
 		let binLocation = pathParts.join('/');
+		let settingsFilePath="";
+
+		let emulatorCommand = "";
+
+		if (isWindows) {
 		
-		// Build the emulator settings file path
+		emulatorCommand = `${emulatorPath} /portable /singleinstance /run "${executable.split("/").join("\\")}"`;
+		
+		 // Build the emulator settings file path
 		pathParts = emulatorPath.split('/');
 		pathParts[pathParts.length-1] = "Altirra.ini";
-		let iniPath = pathParts.join('/');
+		settingsFilePath = pathParts.join('/');
 
 		/* If settings file does not exist, create base settings file with settings that work well for debugging:
 		- Setup H: device under path4
@@ -170,51 +188,62 @@ export class FastbasicRuntime extends EventEmitter {
 		- Disable confirmation on close
 		- Disable pause when inactive
 		*/
-		if (! await this.fileAccessor.doesFileExist(iniPath)) {
-			let defaultIniContents = new TextEncoder().encode(`
-[User\\Software\\virtualdub.org\\Altirra\\Settings]
-"Display: Direct3D9" = 1
-"Display: 3D" = 0
-"Startup: Reuse program instance" = 1
+		if (! await this.fileAccessor.doesFileExist(settingsFilePath)) {
+			let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsWin(binLocation));
 
-[User\\Software\\virtualdub.org\\Altirra\\Profiles\\00000000]
-"Devices" = "[{\\"tag\\": \\"hostfs\\",\\"params\\": {\\"readonly\\": false,\\"path4\\": \\"${binLocation}\\"}}]"
-"Devices: CIO H: patch enabled" = 1		
-"Pause when inactive" = 0
-"Input: Active map names" = "Arrow Keys -> Joystick (port 1)"
-
-[User\\Software\\virtualdub.org\\Altirra\\DialogDefaults]
-"DiscardMemory" = "ok"
-	`);
-
-			await this.fileAccessor.writeFile(iniPath, defaultIniContents);
+			await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
 			await new Promise(resolve => setTimeout(resolve, 100));
 		} else {
 
-		// File exists, so update the path4 location
-		let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(iniPath));
-	  existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
-			return g1+binLocation+g3;
-		});
+			// File exists, so update the path4 location
+			let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(settingsFilePath));
+			existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
+				return g1+binLocation+g3;
+			});
 
-		await this.fileAccessor.writeFile(iniPath, new TextEncoder().encode(existingSettingsFile));
+			await this.fileAccessor.writeFile(settingsFilePath, new TextEncoder().encode(existingSettingsFile));
 			await new Promise(resolve => setTimeout(resolve, 100));
 
+		}
+	} else {
+		// Update settings for Atari800MacX
+			
+		// Build the emulator settings file path
+		settingsFilePath = binLocation + 'atari800macx-settings.a8c';
 
+		/* If settings file does not exist, create base settings file with settings that work well for debugging:
+		- Setup H: device under path4
+		- Auto enable Joystick for arrow keys
+		*/
+		//if (! await this.fileAccessor.doesFileExist(iniPath)) {
+			let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsMac(binLocation, executable));
+			await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
+			await new Promise(resolve => setTimeout(resolve, 100));
+		// } else {
+
+		// // File exists, so update the path4 location
+		// let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(iniPath));
+	  // existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
+		// 	return g1+binLocation+g3;
+		// });
+
+		// await this.fileAccessor.writeFile(iniPath, new TextEncoder().encode(existingSettingsFile));
+		// await new Promise(resolve => setTimeout(resolve, 100));
+		emulatorCommand = emulatorCommand.slice()
+		emulatorCommand = `open "${emulatorPath}" -n --args "${settingsFilePath}"`;
+	}
+	
+	
+		await this.startEmulator(emulatorCommand);
+	
+		if (!noDebug) {
+			// Wait for the program to initiate a breakpoint
+			await this.waitOnProgram();
+		}
 	}
 
 
-		cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", executable.split("/").join("\\") ], (err, stdout) => {
-			if (err) {
-				fastBasicChannel.appendLine(err.message);//.substring(err.message.indexOf("\n")));
-			}
-			fastBasicChannel.appendLine(stdout);
-		});
-		
-		// Wait for the program to initiate a breakpoint
-		await this.waitOnProgram();
-	}
-
+	
 
 	/**
 	 * Continue execution to the next breakpoint or end of program

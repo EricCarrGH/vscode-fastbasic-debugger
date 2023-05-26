@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AtariSwitchType</key>
+	<integer>8</integer>
+	<key>AtariType</key>
+	<integer>8</integer>
+	<key>HardDiskDir4</key>
+	<string>/Users/eric/Documents/vscode</string>
+	<key>HardDrivesReadOnly</key>
+	<false/>
+  <key>MediaStatusDisplayed</key>
+	<false/>
+  <key>PadJoyDown</key>
+	<integer>60</integer>
+	<key>PadJoyDownLeft</key>
+	<integer>66</integer>
+	<key>PadJoyFire</key>
+	<integer>25</integer>
+	<key>PadJoyLeft</key>
+	<integer>58</integer>
+	<key>PadJoyRight</key>
+	<integer>61</integer>
+	<key>PadJoyUp</key>
+	<integer>59</integer>
+	<key>Joystick1Mode_v13</key>
+	<integer>1</integer>
+	<key>Joystick1MultiMode</key>
+	<false/>
+	<key>PaletteFile</key>
+	<string>/Users/eric/Documents/atari/Palettes/new_stella_NTSC.pal</string>
+	<key>ShowFPS</key>
+	<true/>
+</dict>
+</plist>

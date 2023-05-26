@@ -27,13 +27,16 @@ import * as cp from 'child_process';
 import {DEBUG_PROGRAM} from './fastbasicDebugProgram';
 import decompress = require('decompress');
 import decompressUnzip = require('decompress-unzip');
+import fetch from 'node-fetch';
+import util = require('util');
+const exec = util.promisify(require('child_process').exec);
 
 //const UrlFastbasicMac="https://github.com/dmsc/fastbasic/files/11000997/fastbasic-v4.6-31-g5004ef1-dirty-macosx.zip";
 //const UrlFastbasicWin="https://github.com/dmsc/fastbasic/releases/download/v4.6/fastbasic-v4.6-win32.zip";
 const URL_FASTBASIC_MAC="https://ll.carr-designs.com/downloads/fastbasic-v4.6-31-macosx.zip";
 const URL_FASTBASIC_WIN="https://ll.carr-designs.com/downloads/fastbasic-v4.6-31-win32.zip";
 
-const URL_EMULATOR_MAC="https://ll.carr-designs.com/downloads/Atari800MacX6.0.1.dmg.gz";
+const URL_EMULATOR_MAC="https://ll.carr-designs.com/downloads/Atari800MacX-X6.0.1.dmg.zip";
 const URL_EMULATOR_WIN="https://ll.carr-designs.com/downloads/Altirra-4.10.zip";
 
 /**
@@ -197,7 +200,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		if (installPath.length === 0 ) {
 			let textInstall = "Install", textChoose = "Choose Folder";
-			installPath = isWindows ? "c:\\atari" : "~/atari";
+			const homedir = require('os').homedir();
+			installPath = isWindows ? "c:\\atari" : homedir + "/atari";
 		
 			result = await vscode.window.showInformationMessage(
 				`Will install FastBasic/Emulator folders inside "${installPath}"`,
@@ -233,10 +237,19 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		await vsContext.globalState.update('installPath', installPath);
 		
 		installPath += "/" + destFolder;
-		await vscode.workspace.fs.createDirectory(vscode.Uri.file(installPath));
+		try {
+			//installPath = installPath.replace("~", "${env:HOME}");
+			let uri = vscode.Uri.file(installPath)
+			
+			await vscode.workspace.fs.createDirectory(uri);
+		} catch (e : any) {
+			await vscode.window.showInformationMessage(
+				`Error creating path "${installPath}" : ${e.message}`,"Okay");
+			return "";
+		}
 		let zipPath = installPath+ "/" + destFolder+"-download.zip";
 		
-		var res = await fetch(new URL(sourceUrl));
+	  const res = await fetch(new URL(sourceUrl));
 		if (res.status !== 200) {
 			return "";
 		}
@@ -248,9 +261,9 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 				]
 		});
 
-		currentPath = installPath + "/" + executable +  (isWindows ? ".exe" : "");
+		currentPath = installPath + "/" + executable +  (isWindows ? ".exe" : ".app");
 
-		// Check if downloaded compiler exists
+		// Check if downloaded file exists
 		if (await this._fileAccessor.doesFileExist(currentPath)) {
 			await vsContext.globalState.update(key, currentPath);
 		return currentPath;
@@ -286,12 +299,20 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			return undefined;
 		}
 
-		let emulatorPath = await this.validateDependency(
+		let emulatorPath = args.emulatorPath.trim();
+
+		// Attempt to find installed Mac Emulator
+		if (!isWindows && emulatorPath === "") {
+			const { stdout } = await exec("mdfind -name 'Atari800Macx.app'");
+			emulatorPath = stdout.trim();
+		}
+	
+		emulatorPath = await this.validateDependency(
 			"emulatorPath",
 			(isWindows ? "Altirra" : "Atari800MacX" ) + " Emulator",
 			isWindows ? URL_EMULATOR_WIN : URL_EMULATOR_MAC,
 			isWindows ? "Altirra" : "Atari800MacX",
-			args.emulatorPath,
+			emulatorPath,
 			isWindows ? "altirra64" : "atari800macx",
 			true
 			);
@@ -411,19 +432,26 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		fastBasicChannel.appendLine(`Running in emulator..`);
 
 		// Don't bother starting debugging if there are no breakpoints
-		if (noDebug) {
+		//if (noDebug) {
+			
+		
 			// Run the program in the emulator
-			cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", atariExecutable.split("/").join("\\") ], (err, stdout) => {
-				if (err) {
-					fastBasicChannel.appendLine(err.message);
-				}
-				fastBasicChannel.appendLine(stdout);
-			});
-		 this.sendEvent(new TerminatedEvent());
-		 return undefined;
-		}
+		//	await this._runtime.startEmulator(emulatorCommand);
+
+			// cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", atariExecutable.split("/").join("\\") ], (err, stdout) => {
+			// 	if (err) {
+			// 		fastBasicChannel.appendLine(err.message);
+			// 	}
+			// 	fastBasicChannel.appendLine(stdout);
+			// });
 		// start the program in the runtime
-		await this._runtime.start(file, emulatorPath, atariExecutable);
+		await this._runtime.start(file, noDebug, emulatorPath, atariExecutable);
+
+		if (noDebug) {
+			this.sendEvent(new TerminatedEvent());
+			return undefined;
+		}
+ 
 		this.sendResponse(response);
 	}
 
@@ -727,11 +755,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		return dapVariable;
 	}
-
 	
 	protected async evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): Promise<void> {
-
-		let reply: string | undefined;
 		let rv: RuntimeVariable | undefined;
 
     let nameParts = args.expression.toUpperCase().split("(");
