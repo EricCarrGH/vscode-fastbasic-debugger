@@ -134,6 +134,7 @@ export class FastbasicRuntime extends EventEmitter {
 
 	private _addressToLineMap = new Map<number, number>();
 	private _lineToAddressMap = new Map<number, number>();
+	private _maxLine : number = 0;
   private _debugCheckAddress: number = 0;
 	private _debugBreakAddress: number = 0;
 	private _debugTokRET: number = 0;
@@ -490,6 +491,7 @@ export class FastbasicRuntime extends EventEmitter {
 		*/
 		this._varMinLoc = 65536;
 		this._varMemSize = 0;
+		this._maxLine = 0;
 		for (let i = 0; i < labelLines.length; i++) {
 	
 			let parts = labelLines[i].split('.');
@@ -529,6 +531,9 @@ export class FastbasicRuntime extends EventEmitter {
 						if (existingLine<line) {
 							this._addressToLineMap.set(memLoc, line);//remove the +1 later
 							this._lineToAddressMap.set(line, memLoc);
+							if (line> this._maxLine) {
+								this._maxLine = line;
+							}
 						}
 					}
 				} else if (parts[1].startsWith("fb_var_")) {
@@ -712,8 +717,16 @@ export class FastbasicRuntime extends EventEmitter {
 		let index = 1;
 
 		// Set the appropriate memory location for stepping:
+		// If jump to was specified on a line that is invalid, keep checking subsequent lines until one is found
 		if (jumpTo>0) {
-			let newLineAddress = this._lineToAddressMap.get(jumpTo) || 0;
+			let newLineAddress = 0;
+			for (let jumpLine = jumpTo;jumpLine<=this._maxLine; jumpLine++) {
+				newLineAddress = this._lineToAddressMap.get(jumpLine) || 0;
+				if (newLineAddress>0) {
+					break;
+				}
+			}
+
 			if (newLineAddress) {
 				this.setAtariWord(payload, index, newLineAddress);
 			  [payload[index], payload[index+1]] = [payload[index+1], payload[index]];

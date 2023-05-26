@@ -311,12 +311,12 @@ do
     
     ' Set next wave when time runs out for current wave
     if not _waveTimer
-      _waveTimer=32
+      _waveTimer=14+18*(_currentWave<19)
       
       ' If a non star wave, increment wave index for the next set of obstacles
       if _currentWave and not _currentWave&1
         _waveIndex=_waveIndex+p._waveIndex+3
-        _waveTimer=110
+        _waveTimer=120
       e.
 
       ' Store current wave
@@ -329,7 +329,7 @@ do
       pos.6,1:?#6,c.128h
 
       ' Check if player reached the final wave
-      if _currentWave>21
+      if _currentWave>20
         mset _sound,8,0
         _lives=9:@s
       e.

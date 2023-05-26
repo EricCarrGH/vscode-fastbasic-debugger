@@ -40,7 +40,7 @@ const URL_EMULATOR_MAC="https://ll.carr-designs.com/downloads/Atari800MacX-X6.0.
 const URL_EMULATOR_WIN="https://ll.carr-designs.com/downloads/Altirra-4.10.zip";
 
 /**
- * This interface describes the fastbasic-debugger specific launch attributes
+ * This interface describes the fastbasic-debugger specific launch attributes 
  * (which are not part of the Debug Adapter Protocol).
  * The schema for these attributes lives in the package.json of the fastbasic-debugger extension.
  * The interface should always match this schema.
@@ -189,7 +189,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		// Offer to install dependency
 		let cancelMessage = "I'll configure it (advanced)";
 		let result = autoInstall ? "go" : await vscode.window.showInformationMessage(
-			`FastBasic/Emulator not configured in launch.json`, 
+			`FastBasic or Emulator not configured in launch.json`, 
 			"Download & Install", cancelMessage);
 
 		// User cancelled
@@ -204,7 +204,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			installPath = isWindows ? "c:\\atari" : homedir + "/atari";
 		
 			result = await vscode.window.showInformationMessage(
-				`Will install FastBasic/Emulator folders inside "${installPath}"`,
+				`Will install FastBasic & Emulator inside "${installPath}"`,
 				textInstall, textChoose);
 
 			// User cancelled
@@ -249,6 +249,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		}
 		let zipPath = installPath+ "/" + destFolder+"-download.zip";
 		
+		fastBasicChannel.appendLine(`Downloading ${friendlyName}..`);
+
 	  const res = await fetch(new URL(sourceUrl));
 		if (res.status !== 200) {
 			return "";

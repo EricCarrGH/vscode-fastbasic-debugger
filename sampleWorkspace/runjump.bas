@@ -63,7 +63,7 @@ _secI=660
 PR.I
   ' Show Welcome / Game Over Screen
   g.17
-  j=&"JumpMan"
+  j=&"Mario Run"
   if _score
     j=&"game over"
     POS.6,10:?#6,"SCORE ";_SCORE
