@@ -705,12 +705,12 @@ export class FastbasicRuntime extends EventEmitter {
 		let payload = new Uint8Array(16000);
 	
 		/* Payload format:
-		0 [byte] Message/command (1 for now)
-		//1 [word] Step/Continue memory location (currently debug check address)
-		//3 [byte] Step/Continue value
-		4 [word] Location/Value pair count (used for check proc dest and set/clear breakpoints)
-			[word:location][word:value] pairs
-		  [word:location][word:length][data] sets
+		[byte] Message/command
+			[word] Jump To location if command is jump (3)
+		[word] Location/Value pair count
+			[word:location][word:value] pair (used to set/clear breakpoints)
+			..
+		[word:location][word:length][data] sets (read until EOF)
 		*/
 		
 		payload[0] = command; // Let the program know our intent
@@ -760,12 +760,11 @@ export class FastbasicRuntime extends EventEmitter {
 		// Empty the list of cleared, now that the program will have the latest results.
 		this.clearedBreakPoints = [];
 		
-		// Set the number of [word:location][word:value] pairs that were added added
+		// Set the number of [word:location][word:value] pairs that were added
 		this.setAtariWord(payload, countIndex, locValCount);
 
-		// Send any variables to update in form of [word:location][word:length][data]		
 
-		// Update _check to either return or break
+		// Update __DEBUG_CHECK TOKen to either return or jump to the break proc, in form of [word:location][word:length][data]		
 		this.setAtariWord(payload,index, this._debugCheckAddress);
 
 		if (command === MessageCommand.continue) {
@@ -778,7 +777,8 @@ export class FastbasicRuntime extends EventEmitter {
 			this.setAtariWord(payload, index+5, this._debugBreakAddress);
 			index+=7;
 		}
-		
+
+		// Send any variables to update in form of [word:location][word:length][data]		
 		this.variables.forEach(v => {
 			if (v.memLoc && v.modified) {
 				v.modified = false;
