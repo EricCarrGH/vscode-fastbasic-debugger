@@ -118,7 +118,7 @@ h=peek(&_qq+i)-32
 poke &_qq+i, h'+20*(h=0 or h=4 or h=8)
 n.
   
- @r
+ @r   
 endproc
 
 ' Draw current room

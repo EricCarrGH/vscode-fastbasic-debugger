@@ -21,7 +21,7 @@ This document describes the communication between Debugger (vscode) and Program 
 Initialize the debugging session and establish breakpoints:
 
 1. Debugger injects debugging code to FastBasic source file, and runs FastBasic compile to generate lst,lbl,xex.
-3. Debugger parses lst/lbl files to build variable list and variable data request payload
+3. Debugger parses lst/lbl files to read line addresses and build the variable list and variable data request payload
 4. Debugger retrieves list of breakpoints from vscode and writes "1:Breakpoint List" to program
 5. Debugger starts emulator to run compiled XEX
 6. Program processes "1:Continue Execution", and starts Standard Execution

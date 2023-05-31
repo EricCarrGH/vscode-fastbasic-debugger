@@ -37,35 +37,6 @@
 				{
 					"name": "meta.function-call",
 					"match":"(@)"
-				},
-				
-				{
-					"name": "keyword.control",
-					"match": "\\b(?i)(DO|IF|THEN|ELSE|ELIF|ENDIF|ENDPROC|PROC|REPEAT|UNTIL|WEND|WHILE)\\b"
-				},
-				{
-					"name": "xsupport.function",
-					"match": "\\b(?i)(ABS|ADR|ASC|ATN|CHR$|CLOAD|CLOG|CLOSE|CLR|COLOR|COM|CONT|COS|CSAVE|DATA|DEG|DOS|DRAWTO|ENTER|EXP|FRE|GET|GRAPHICS|INPUT|INT|LEN|LETLIST|LOAD|LOCATE|LOG|LPRINT|NOTE|OPEN|PADDLE|PEEK|PLOT|POINT|POKE|POP|POSITION|PRINT|PTRIG|PUT|RAD|READ|REM|RESTORE|RND|SAVE|SETCOLOR|SGN|SIN|SOUND|SQR|STATUS|STICK|STRIG|STR$|USR|VAL|XIO?)\\b"
-				}, 
-				{
-					"name": "xsupport.function",
-					"match": "\\b(?i)(DPEEK|ERR|EXP10|KEY|LOG10|RAND|TIME|PMADR)\\b"
-				}, 
-				{
-					"name": "xkeyword.control",
-					"match": "\\b(?i)(AND|BYE|END|ELSE|EXIT|FOR|GOSUB|GOTO|GO TO|IF|LOOP|NEW|NEXT|NOT|ON|OR|RETURN|RUN|STEP|STOP|THEN|TO|TRAP)\\b"
-				},
-				{
-					"name": "xsupport.function",
-					"match": "\\b(?i)(BGET|BPUT|DEC|DLI|DPOKE|EXEC|FCOLOR|FILLTO|INC|MOVE|MSET|PAUSE|PMGRAPHICS|PMHPOS|TIMER)\\b"
-				},
-				{
-					"name": "xkeyword.control",
-					"match": "\\b(?i)(DO|ELIF|ENDIF|ENDPROC|PROC|REPEAT|UNTIL|WEND|WHILE)\\b"
-				},
-				{
-					"name": "xstorage.type",
-					"match": "\\b(?i)(DIM|BYTE|WORD)\\b"
 				}
 				
 			]
@@ -83,22 +54,6 @@
 							"match": "\\\\[0-9]*"
 						}
 					]
-				},
-				{
-					"name": "Xvariable.language",
-					"match": "\\b[_A-Z][_A-Z0-9]*\\b"
-				},
-				{
-					"name": "Xvariable.other",
-					"match": "(?i)[_A-Z][_A-Z0-9]*%?\\$?"
-				},
-				{
-					"name": "Xconstant.numeric",
-					"match": "[+-]?([0-9]*[.])?[0-9]+"
-				},
-				{
-					"name": "Xconstant.other",
-					"match": "\\$[A-F0-9]*"
 				}
 			]
 		}

@@ -171,7 +171,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	 sourceUrl: string, destFolder:string, currentPath: string, executable: string, autoInstall: boolean) : Promise<string> {
 
 		// Check if args provided path exists
-		if (currentPath.trim().length>0) {
+		if (currentPath && currentPath.trim().length>0) {
 			if (await this._fileAccessor.doesFileExist(currentPath)) {
 				return currentPath;
 			}
@@ -279,6 +279,9 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		await this._configurationDone.wait(1000);
 		let isWindows = 'win32' === process.platform;
 
+		args.compilerPath = args.compilerPath || "";
+		args.emulatorPath = args.emulatorPath || "";
+		
 		if (args.sourceFile.toLocaleLowerCase().endsWith(".json")) {
 			this.sendEvent(new TerminatedEvent());
 			return undefined;
