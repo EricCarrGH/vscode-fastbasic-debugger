@@ -263,7 +263,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 				]
 		});
 
-		currentPath = installPath + "/" + executable +  (isWindows ? ".exe" : ".app");
+		currentPath = installPath + "/" + executable;
 
 		// Check if downloaded file exists
 		if (await this._fileAccessor.doesFileExist(currentPath)) {
@@ -291,7 +291,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			isWindows ? URL_FASTBASIC_WIN : URL_FASTBASIC_MAC,
 			"fastbasic",
 			args.compilerPath,
-			"fastbasic",
+			"fastbasic" + (isWindows ? ".exe" : ""),
 			false );
 
 		if (compilerPath==="") {
@@ -315,7 +315,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			isWindows ? URL_EMULATOR_WIN : URL_EMULATOR_MAC,
 			isWindows ? "Altirra" : "Atari800MacX",
 			emulatorPath,
-			isWindows ? "altirra64" : "atari800macx",
+			isWindows ? "altirra64.exe" : "atari800macx.app",
 			true
 			);
 
