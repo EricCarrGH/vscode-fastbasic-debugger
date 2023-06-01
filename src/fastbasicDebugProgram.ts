@@ -38,27 +38,19 @@ PROC ___DEBUG_BREAK
     INC ___DEBUG_I
 
     ' String array points to a second array that points to each string
-		' TODO - support non strings with a len of 256!
+		' TODO - support non string arrays with a len of 256!
     if ___DEBUG_LEN mod 256 = 0 and ___DEBUG_LEN > 256
-      while ___DEBUG_LEN>0
-          
-          '? "str: @ ";dpeek(___DEBUG_MEM+i*2);":";$(dpeek(___DEBUG_MEM+i*2))
-					
+      while ___DEBUG_LEN>0	
           bput #4, ___DEBUG_MEM, 2
           bput #4, dpeek(___DEBUG_MEM), 256
 					if ___DEBUG_MEM >0
 						inc ___DEBUG_MEM: inc ___DEBUG_MEM
 					ENDIF
-
           ___DEBUG_LEN=___DEBUG_LEN-256
       wend
     else
-      bput #4, ___DEBUG_MEM, ___DEBUG_LEN
-      ' if ___DEBUG_LEN mod 256 = 0 then ? "str:";$(___DEBUG_MEM)
+      IF ___DEBUG_LEN > 0 THEN bput #4, ___DEBUG_MEM, ___DEBUG_LEN
     ENDIF
-    
-    
-  '  ? "wrote (was " ; ___DEBUG_MEMO ; ") @";___DEBUG_MEM; " : "; ___DEBUG_LEN
     
   loop
   close #4
@@ -100,7 +92,7 @@ PROC ___DEBUG_POLL
 			bget #5,___DEBUG_MEM,2
 		NEXT
 
-    ' Update any variable memory from debugger
+    ' Update any memory chunks from debugger 
     do    
       ___DEBUG_MEM = 0:bget #5,&___DEBUG_MEM,4:if ___DEBUG_MEM = 0 then exit
       bget #5, ___DEBUG_MEM, ___DEBUG_LEN    

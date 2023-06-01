@@ -4,7 +4,7 @@
 
 import { EventEmitter } from 'events';
 import { fastBasicChannel } from './activateDebugger';
-import * as cp from 'child_process';
+//import * as cp from 'child_process';
 import util = require('util');
 const exec = util.promisify(require('child_process').exec);
 import { GetEmulatorSettingsMac, GetEmulatorSettingsWin } from './emulatorSettingsFiles';
@@ -230,7 +230,7 @@ export class FastbasicRuntime extends EventEmitter {
 
 		// await this.fileAccessor.writeFile(iniPath, new TextEncoder().encode(existingSettingsFile));
 		// await new Promise(resolve => setTimeout(resolve, 100));
-		emulatorCommand = emulatorCommand.slice()
+		emulatorCommand = emulatorCommand.slice();
 		emulatorCommand = `open "${emulatorPath}" -n --args "${settingsFilePath}"`;
 	}
 	

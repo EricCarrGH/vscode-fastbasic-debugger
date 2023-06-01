@@ -239,7 +239,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		installPath += "/" + destFolder;
 		try {
 			//installPath = installPath.replace("~", "${env:HOME}");
-			let uri = vscode.Uri.file(installPath)
+			let uri = vscode.Uri.file(installPath);
 			
 			await vscode.workspace.fs.createDirectory(uri);
 		} catch (e : any) {

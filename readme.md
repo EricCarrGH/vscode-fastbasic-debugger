@@ -55,10 +55,14 @@ All variable types are supported:
 
 This is currently a work in progress, but I am working on a theme that gives an experience very close to writing original Atari BASIC, including font, with some color syntax highlighting as a bonus.
 
-## Known  Limitations
+## Current Limitations
+
+This is a work in progress, with the following limitations:
+
+* The program opens files on #4 and #5 to communicate with the debugger, so your program must use different channels (e.g. #1, #2) for I/O. I chose #4 and #5 because these are not typically used.  
 * You can only set/remove breakpoints when the program is stopped for debugging, or not running. This is to keep the program execution speed fast.
 * If your program has a lot of variables (or arrays with many entries), tthere will be a noticable pause when stepping through (F10) line by line.  This is because all variable memory is sent to the debugger after each line.
-* These limitations may be solved in the future if needed, usinga  different approach from the H: host drive for communication.
+* These limitations may be solved in the future if needed, using a different approach from the H4: host drive for communication.
 
 ## FAQ / Troubleshooting
 
