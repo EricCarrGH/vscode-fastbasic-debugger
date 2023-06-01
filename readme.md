@@ -55,6 +55,11 @@ All variable types are supported:
 
 This is currently a work in progress, but I am working on a theme that gives an experience very close to writing original Atari BASIC, including font, with some color syntax highlighting as a bonus.
 
+## Known  Limitations
+* You can only set/remove breakpoints when the program is stopped for debugging, or not running. This is to keep the program execution speed fast.
+* If your program has a lot of variables (or arrays with many entries), tthere will be a noticable pause when stepping through (F10) line by line.  This is because all variable memory is sent to the debugger after each line.
+* These limitations may be solved in the future if needed, usinga  different approach from the H: host drive for communication.
+
 ## FAQ / Troubleshooting
 
 * **What if downloading/installing FastBasic or the Emulator fails?**
@@ -67,4 +72,4 @@ When you press F5, the following happens:
 
 1. Special Debug FastBasic procs are appended to the end of your program, with a unique prefix so they do not interfere with your existing program. 
 2. A "bin" folder is created within the folder where your source file exists. FastBasic creates intermediate files here, along with the final XEX file. 
-3. The emulator is then configured to point the H: host drive to the bin folder, which the FastBasic debug procs use to communicate with the extension by reading/writing temporary debug,* files.
+3. The emulator is then configured to point the H4: host drive to the bin folder, which the FastBasic debug procs use to communicate with the extension by reading/writing temporary debug,* files.
