@@ -1,14 +1,16 @@
 # FastBasic Debugger
 
-The goal of this project is to provide a first class debugging experience for FastBasic in Visual Studio Code on Windows or Mac.
+This a work-in-progress extension with the goal to provide a first class debugging experience for FastBasic in Visual Studio Code on Windows or Mac.
 
 Press F5 to debug a file, or Ctrl+F5 to run it without debugging.
 
 On first debug, the extension will prompt to download the FastBasic compilar and a platform specific Atari emulator. It will then configure that emulator to work for debugging. You can tweak the emulator settings (NTSC vs PAL, Enable Joystick, etc) while it is running.
 
+ **If you encounter ISSUES,**  please let me know at: https://forums.atariage.com/topic/351055-fastbasic-debugger-extension-for-vscode/
+
 ## Features
 
-* Automatically downloads the latest FastBasic and Atari Emulator (Altirra or AtariMacX)
+* Automatically downloads the latest FastBasic and Atari Emulator (Altirra or AtariMacX) on Windows or Mac
 * Compiles and run or debug in emulator with a single key press
 * Inspect and change variables while debugging
 * See variable value in decimal/hex along with address on hover
@@ -68,6 +70,10 @@ This is a work in progress, with the following limitations:
 
 * **What if downloading/installing FastBasic or the Emulator fails?**
  Make sure you have selected a folder that you have write access to. Whichever folder you choose, the extension will create sub-folders inside it for FastBasic and the emulator.
+
+* **I set a breakpoint and debug, but the code never stops at the breakpoint**
+  1. Make sure your breakpoint is on a valid line that does something. It cannot be on a empty line, comments line, start or end of a PROC, or a DATA statement.
+  2. Close the emulator and try debugging again.
 
 ## Under the Hood (how debugging works)
 
