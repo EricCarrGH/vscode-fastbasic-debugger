@@ -33,11 +33,11 @@ const exec = util.promisify(require('child_process').exec);
 
 //const UrlFastbasicMac="https://github.com/dmsc/fastbasic/files/11000997/fastbasic-v4.6-31-g5004ef1-dirty-macosx.zip";
 //const UrlFastbasicWin="https://github.com/dmsc/fastbasic/releases/download/v4.6/fastbasic-v4.6-win32.zip";
-const URL_FASTBASIC_MAC="https://ll.carr-designs.com/downloads/fastbasic-v4.6-31-macosx.zip";
-const URL_FASTBASIC_WIN="https://ll.carr-designs.com/downloads/fastbasic-v4.6-31-win32.zip";
+const URL_FASTBASIC_MAC="https://www.carr-designs.com/downloads/fastbasic-v4.6-31-macosx.zip";
+const URL_FASTBASIC_WIN="https://www.carr-designs.com/downloads/fastbasic-v4.6-31-win32.zip";
 
-const URL_EMULATOR_MAC="https://ll.carr-designs.com/downloads/Atari800MacX-6.0.1.zip";
-const URL_EMULATOR_WIN="https://ll.carr-designs.com/downloads/Altirra-4.10.zip";
+const URL_EMULATOR_MAC="https://www.carr-designs.com/downloads/Atari800MacX-6.0.1.zip";
+const URL_EMULATOR_WIN="https://www.carr-designs.com/downloads/Altirra-4.10.zip";
 
 /**
  * This interface describes the fastbasic-debugger specific launch attributes 
