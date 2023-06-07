@@ -82,14 +82,11 @@ const VAR_TYPE_LEN: Map<string, number> = new Map([
 
 enum MessageCommand {
 	continue = 1,
-	stepNext = 2,
-	jump = 3
+	stepIn = 2,
+	jump = 3,
+	stepOver = 4
 } 
 
-/**
- * When implementing your own debugger extension for VS Code, you probably don't need this
- * class because you can rely on some existing debugger or runtime.
- */
 export class FastbasicRuntime extends EventEmitter {
 
 
@@ -105,6 +102,7 @@ export class FastbasicRuntime extends EventEmitter {
 
 	private _varMemSize: number = 0; // Size
 	private _varMinLoc: number = 0;
+	private _sourceLines : string[] = [];
 
 	private variables = new Map<string, RuntimeVariable>();
 	
@@ -255,10 +253,18 @@ export class FastbasicRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Step forward to the next line.
+	 * Step into this line (will step into procedures).
 	 */
-	public async step() {
-		await this.sendMessageToProgram(MessageCommand.stepNext);
+	public async stepIn() {
+		await this.sendMessageToProgram(MessageCommand.stepIn);
+		await this.waitOnProgram();
+	}
+
+	/**
+	 * Step over this line (avoid steping into a procedure).
+	 */
+	public async stepOver() {
+		await this.sendMessageToProgram(MessageCommand.stepOver);
 		await this.waitOnProgram();
 	}
 
@@ -377,7 +383,7 @@ export class FastbasicRuntime extends EventEmitter {
 	}
 
 	private async initializeContents(memory: Uint8Array, list: Uint8Array, labels: Uint8Array) {
-		//this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
+		this._sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
 		let listLines = new TextDecoder().decode(list).split(/\r?\n/);
 		let labelLines = new TextDecoder().decode(labels).split(/\r?\n/);
 
@@ -695,11 +701,29 @@ export class FastbasicRuntime extends EventEmitter {
 	}
 
 	private async sendMessageToProgram(command: MessageCommand, jumpTo: number = 0): Promise<void> {
-		const bps = this.breakPoints.get(this._sourceFile) ?? new Array<IRuntimeBreakpoint>();
+		const bps = [...this.breakPoints.get(this._sourceFile) ?? new Array<IRuntimeBreakpoint>()];
 		
-		// If first line has a breakpoint set, and we are starting, change to step
+		// If first line has a breakpoint set, and we are starting, change to step in
 		if (this.currentLine<=1 && bps.find(o=> o.line === 1)) {
-			command = MessageCommand.stepNext;
+			command = MessageCommand.stepIn;
+		}
+
+		// If requested to step over, check if this call might call a stored proc. If so,
+		// set a temp breakpoint on the very next line
+		if (command === MessageCommand.stepOver && this.currentLine < this._sourceLines.length) {
+			var line = this._sourceLines[this.currentLine-1].toUpperCase()
+		  if (line.indexOf("@")>-1 || line.indexOf("EXEC")>-1 || line.indexOf("EXE.")>-1) {
+				// Check we aren't at the end of a proc, as we can't set a breakpoint on the next line
+				if (this._sourceLines[this.currentLine].toUpperCase().indexOf("ENDP")<0 ) {
+					bps.push( { id: 0, verified:true, line: this.currentLine+1});
+					command = MessageCommand.continue;
+				}
+			} 
+		}
+
+		// If step over was not changed to a continue with temp breakpoint, change it to a step in
+		if (command === MessageCommand.stepOver) {
+			command =  MessageCommand.stepIn;
 		}
 
 		let payload = new Uint8Array(16000);

@@ -6,3 +6,6 @@
 
 ## 0.5.0
 * Fixed edge case with 0 non-array variables
+
+## 0.6.0
+* Add limited step/step into functinality (to step over a procedure call)

@@ -635,7 +635,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-		this._runtime.step();
+		this._runtime.stepOver();
 		this.sendResponse(response);
 	}
 
@@ -648,6 +648,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
 		//this._runtime.stepIn(args.targetId);
 		//this.sendResponse(response);
+		this._runtime.stepIn();
+		this.sendResponse(response);
 	}
 
 	protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
