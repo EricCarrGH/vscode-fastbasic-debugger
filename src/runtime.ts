@@ -384,6 +384,10 @@ export class FastbasicRuntime extends EventEmitter {
 
 	private async initializeContents(memory: Uint8Array, list: Uint8Array, labels: Uint8Array) {
 		this._sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
+		for (let i=0;i<this._sourceLines.length;i++) {
+			this._sourceLines[i] = this._sourceLines[i].trim();
+		}
+
 		let listLines = new TextDecoder().decode(list).split(/\r?\n/);
 		let labelLines = new TextDecoder().decode(labels).split(/\r?\n/);
 
@@ -703,6 +707,8 @@ export class FastbasicRuntime extends EventEmitter {
 	private async sendMessageToProgram(command: MessageCommand, jumpTo: number = 0): Promise<void> {
 		const bps = [...this.breakPoints.get(this._sourceFile) ?? new Array<IRuntimeBreakpoint>()];
 		
+		let addedTempBreakpoint = false;
+
 		// If first line has a breakpoint set, and we are starting, change to step in
 		if (this.currentLine<=1 && bps.find(o=> o.line === 1)) {
 			command = MessageCommand.stepIn;
@@ -713,10 +719,14 @@ export class FastbasicRuntime extends EventEmitter {
 		if (command === MessageCommand.stepOver && this.currentLine < this._sourceLines.length) {
 			var line = this._sourceLines[this.currentLine-1].toUpperCase()
 		  if (line.indexOf("@")>-1 || line.indexOf("EXEC")>-1 || line.indexOf("EXE.")>-1) {
-				// Check we aren't at the end of a proc, as we can't set a breakpoint on the next line
-				if (this._sourceLines[this.currentLine].toUpperCase().indexOf("ENDP")<0 ) {
-					bps.push( { id: 0, verified:true, line: this.currentLine+1});
-					command = MessageCommand.continue;
+				for(let nextLine = this._currentLine; nextLine<=this._sourceLines.length;nextLine++) {
+					// Check we aren't at the end of a proc, as we can't set a breakpoint on the next line
+					if (this._sourceLines[nextLine] != "" && this._sourceLines[nextLine].toUpperCase().indexOf("ENDP")<0 && !this._sourceLines[nextLine].startsWith("'") && !this._sourceLines[nextLine].startsWith(".")) {
+						bps.push({ id: 0, verified:true, line: nextLine+1} );
+						addedTempBreakpoint = true;
+						command = MessageCommand.continue;
+						break;
+					}
 				}
 			} 
 		}
@@ -783,6 +793,12 @@ export class FastbasicRuntime extends EventEmitter {
 
 		// Empty the list of cleared, now that the program will have the latest results.
 		this.clearedBreakPoints = [];
+
+		// Add the temp breakpoint to the cleared list so it is cleared on the next command
+		if (addedTempBreakpoint) {
+			this.clearedBreakPoints.push(bps[bps.length-1]);
+		}
+
 		
 		// Set the number of [word:location][word:value] pairs that were added
 		this.setAtariWord(payload, countIndex, locValCount);
