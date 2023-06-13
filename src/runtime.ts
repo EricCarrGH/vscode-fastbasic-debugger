@@ -654,7 +654,7 @@ export class FastbasicRuntime extends EventEmitter {
 								varIndex = heapIndex;
 								heapIndex+=typeLen;
 							}
-							v.setValueFromSource(this.getAtariValue(debugFileResponse, varIndex, v.type));
+							v.setValueFromSource(this.getAtariValue(debugFileResponse, varIndex, v.type, true));
 
 							break;
 						}
@@ -679,7 +679,7 @@ export class FastbasicRuntime extends EventEmitter {
 									}
 								}
 								
-								v.value[i].setValueFromSource(this.getAtariValue(debugFileResponse, heapIndex, v.type));
+								v.value[i].setValueFromSource(this.getAtariValue(debugFileResponse, heapIndex, v.type, true));
 								heapIndex += typeLen;
 							}
 						}
@@ -868,9 +868,17 @@ export class FastbasicRuntime extends EventEmitter {
 		array[offset+1] = value/256;
 	}
 
-	private getAtariValue(array:Uint8Array, offset: number, type: string)  {
+	private getAtariValue(array:Uint8Array, offset: number, type: string, treatWordAsSigned = false)  {
 		switch (type) {
-			case VAR_WORD : return array[offset] + array[offset+1]*256;
+			case VAR_WORD : 
+				let wordValue = array[offset] + array[offset+1]*256;
+				
+				// Handle signed words
+				if (treatWordAsSigned && wordValue>32768) {
+					wordValue = wordValue - 65536;
+				}
+
+				return wordValue;
 			case VAR_BYTE : return array[offset];
 			case VAR_FLOAT: 
 				// Parse Atari 6-byte BCD
@@ -898,6 +906,10 @@ export class FastbasicRuntime extends EventEmitter {
 	private setAtariValue(array:Uint8Array, offset: number, type: string, value) : number {
 		switch (type) {
 			case VAR_WORD : 
+				// Handle signed value
+				if (value<0) {
+					value = value + 65536;
+				}
 				array[offset] = Number(value) % 256;
 				array[offset+1] = Number(value)/256;
 				return 2;

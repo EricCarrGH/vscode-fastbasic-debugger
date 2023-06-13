@@ -9,3 +9,6 @@
 
 ## 0.6.1
 * Add limited step/step into functinality (to step over a procedure call)
+
+## 0.6.2
+* Fixed representation of signed numbers (words)

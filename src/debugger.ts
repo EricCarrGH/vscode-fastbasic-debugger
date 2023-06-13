@@ -781,7 +781,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			
 			if (rv.memLoc>0) {
 				if (!isNaN(Number(v.value)) && v.value.indexOf(".")<0)  {
-					v.value = v.value + ' $' + Number(v.value).toString(16).toUpperCase();
+					v.value = v.value + (Number(v.value)<0 ? " -$":" $")+Math.abs(Number(v.value)).toString(16).toUpperCase();
 				}
 				v.value += `  |  ADR=$${rv.memLoc.toString(16).toUpperCase()}`;
 			} else {
@@ -806,7 +806,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	}
 
 	private formatNumber(x: number) {
-		return this._valuesInHex ? '$' + x.toString(16) : x.toString(10);
+		return this._valuesInHex ? (x<0 ? "-":"")+'$' + Math.abs(x).toString(16) : x.toString(10);
 	}
 
 	private createSource(filePath: string): Source {
