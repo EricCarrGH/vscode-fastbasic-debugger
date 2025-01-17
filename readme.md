@@ -4,7 +4,7 @@ This a work-in-progress extension with the goal to provide a first class debuggi
 
 Press F5 to debug a file, or Ctrl+F5 to run it without debugging.
 
-On first debug, the extension will prompt to download the FastBasic compilar and a platform specific Atari emulator. It will then configure that emulator to work for debugging. You can tweak the emulator settings (NTSC vs PAL, Enable Joystick, etc) while it is running.
+On first debug, the extension will prompt to download the FastBasic compiler and a platform specific Atari emulator. It will then configure that emulator to work for debugging. You can tweak the emulator settings (NTSC vs PAL, Enable Joystick, etc) while it is running.
 
  **If you encounter ISSUES,**  please let me know at: https://forums.atariage.com/topic/351055-fastbasic-debugger-extension-for-vscode/
 
