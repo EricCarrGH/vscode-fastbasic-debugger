@@ -176,6 +176,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		if (currentPath && currentPath.trim().length>0) {
 			if (await this._fileAccessor.doesFileExist(currentPath)) {
 				return currentPath;
+			} else {
+				return "";
 			}
 		}
 		
@@ -183,7 +185,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		if (currentPath.trim().length>0) {
 			if (await this._fileAccessor.doesFileExist(currentPath)) {
 				return currentPath;
-			}
+			} 
 		}
 
 		let isWindows = 'win32' === process.platform;
@@ -301,7 +303,12 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		if (compilerPath==="") {
 			response.success = false;
-			response.message = "Could not locate FastBasic compiler. Re-install or check the compilerPath in launch.json.";
+			if (args.compilerPath.length>0) {
+				response.message = "The FastBasic compiler path in launch.json is invalid:\n" + args.compilerPath + "\n\n";
+			}
+			else{
+				response.message = "Could not locate FastBasic compiler. Re-install or check the compilerPath in launch.json.";
+			}
 			this.sendResponse(response);
 			return undefined;
 		}
@@ -374,6 +381,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		fastBasicChannel.appendLine(`Compiling ${filename}..`);
 
 		let wroteError = false;
+		//cp.execFile(`${compilerPath}`, ['-g',filename], { cwd: binFolder + '/' }, (err, stdout) => {
 		cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + '/' }, (err, stdout) => {
 			if (err) {
 
