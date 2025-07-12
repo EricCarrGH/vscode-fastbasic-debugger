@@ -6,11 +6,13 @@ Press F5 to debug a file, or Ctrl+F5 to run it without debugging.
 
 On first debug, the extension will prompt to download the FastBasic compiler and a platform specific Atari emulator. It will then configure that emulator to work for debugging. You can tweak the emulator settings (NTSC vs PAL, Enable Joystick, etc) while it is running.
 
+**Advanced use:** You can create a custom launch.json to start a customer emulator (e.g. Altirra on Mac for FujiNet development). More setup steps are needed. See below if desired.
+
  **If you encounter ISSUES,**  please let me know at: https://forums.atariage.com/topic/351055-fastbasic-debugger-extension-for-vscode/
 
 ## Features
 
-* Automatically downloads the latest FastBasic and Atari Emulator (Altirra or AtariMacX) on Windows or Mac
+* Automatically downloads the latest supported FastBasic (4.6) and Atari Emulator (Altirra or AtariMacX) on Windows or Mac
 * Compiles and run or debug in emulator with a single key press
 * Inspect and change variables while debugging
 * See variable value in decimal/hex along with address on hover
@@ -57,10 +59,42 @@ All variable types are supported:
 
 This is currently a work in progress, but I am working on a theme that gives an experience very close to writing original Atari BASIC, including font, with some color syntax highlighting as a bonus.
 
+## Custom Emulator
+
+You can specify a custom emulator path. This is useful to run Altirra using Wine on non Windows machine, for a FujiNet PC setup. You control this by creating a `launch.json` file in a special folder ( `.vscode` ) under the main project folder.
+
+You can also generate it by going to the vscode debug view and clicking **Create a launch json file**.
+
+#### Two important notes!!
+1. The `emulatorPath` contains the path to wine/altirrra, and `windowsPaths` is set to true so the extension passes a windows like path to altirra
+2. When starting an emulator manually, you need to map H4: to the bin folder under the main project folder. This means, in Altirra, go to System->Configure System->Peripherals>Devices, click Add, choose `Host Device (H:)`, set `H4 / H9` to the path, e.g. `Z:\Users\eric\Documents\projects\my-project\bin\` 
+3. You may need to end the emulator to complete a debugging run. This is a bit tedius, sorry.
+
+For reference, here is a sample file that loads Altirra using wine.
+```
+{
+  "version": "0.2.0",
+  "configurations": [
+
+    {
+      "type": "fastbasic",
+      "request": "launch",
+      "name": "Debug FastBASIC",
+      "sourceFile": "${file}",
+      "compilerPath": "",
+      "emulatorPath": "wine /Users/eric/Documents/Altirra/Altirra64.exe",
+      "windowsPaths": true
+    }
+  ]
+}
+```
+
+
 ## Current Limitations
 
 This is a work in progress, with the following limitations:
 
+* It currently installs FastBasic 4.6, which include FujiNet support. There is a more recent version of FastBasic available, which has breaking changes, so it is not yet supported
 * The program opens files on #4 and #5 to communicate with the debugger, so your program must use different channels (e.g. #1, #2) for I/O. I chose #4 and #5 because these are not typically used.  
 * You can only set/remove breakpoints when the program is stopped for debugging, or not running. This is to keep the program execution speed fast.
 * If your program has a lot of variables (or arrays with many entries), tthere will be a noticable pause when stepping through (F10) line by line.  This is because all variable memory is sent to the debugger after each line.
