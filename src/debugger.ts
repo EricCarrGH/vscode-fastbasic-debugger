@@ -56,6 +56,8 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	compilerPath: string;
 	/** absolute path to atari emulator compiler */
 	emulatorPath: string;
+	/** force windows paths */
+	windowsPaths?: boolean;
 }
 
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
@@ -306,22 +308,29 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		let emulatorPath = args.emulatorPath.trim();
 
+		let emulatorPathManuallySet = emulatorPath.trim().length > 0;
+
 		// Attempt to find installed Mac Emulator
-		if (!isWindows && emulatorPath === "") {
+		if (!isWindows && !emulatorPathManuallySet) {
 			const { stdout } = await exec("mdfind -name 'Atari800Macx.app'");
 			emulatorPath = stdout.trim();
 		}
-	
-		emulatorPath = await this.validateDependency(
-			"emulatorPath",
-			(isWindows ? "Altirra" : "Atari800MacX" ) + " Emulator",
-			isWindows ? URL_EMULATOR_WIN : URL_EMULATOR_MAC,
-			isWindows ? "Altirra" : "Atari800MacX",
-			emulatorPath,
-			isWindows ? "altirra64.exe" : "atari800macx.app",
-			true
-			);
+	  
+		
+		if (emulatorPath.trim().length === 0) {
+				
+			emulatorPath = await this.validateDependency(
+				"emulatorPath",
+				(isWindows ? "Altirra" : "Atari800MacX" ) + " Emulator",
+				isWindows ? URL_EMULATOR_WIN : URL_EMULATOR_MAC,
+				isWindows ? "Altirra" : "Atari800MacX",
+				emulatorPath,
+				isWindows ? "altirra64.exe" : "atari800macx.app",
+				true
+				);
 
+		}
+		
 		if (emulatorPath==="") {
 			response.success = false;
 			response.message = "Could not find Atari Emulator. Re-install or check the emulatorPath in launch.json.";
@@ -365,7 +374,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		fastBasicChannel.appendLine(`Compiling ${filename}..`);
 
 		let wroteError = false;
-			cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + '/' }, (err, stdout) => {
+		cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + '/' }, (err, stdout) => {
 			if (err) {
 
 				// Strip the first two lines as they do not add value, unless they are unexpected
@@ -417,7 +426,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		// Wait until the XEX file is created
 		let atariExecutable = binFolder + '/' + filenameNoExt + "xex";
 		if (!wroteError) {
-			await this._fileAccessor.waitUntilFileExists(atariExecutable, 10000);
+			await this._fileAccessor.waitUntilFileExists(atariExecutable, 60000);
 		}
 
 		if (! await this._fileAccessor.doesFileExist(atariExecutable)) {
@@ -450,7 +459,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			// 	fastBasicChannel.appendLine(stdout);
 			// });
 		// start the program in the runtime
-		await this._runtime.start(file, noDebug, emulatorPath, atariExecutable);
+		await this._runtime.start(file, noDebug, emulatorPath, atariExecutable, emulatorPathManuallySet, true === (isWindows || args.windowsPaths));
 
 		if (noDebug) {
 			this.sendEvent(new TerminatedEvent());
@@ -478,13 +487,14 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			for (i = 1; i < sourceLines.length; i++) {
 
 				let line = sourceLines[i].trim().toLocaleLowerCase();
+				let line4Trim = line.length>4 ? line.substring(0,5).trim() : "";
 
 				if (line.length > 0
 					&& !line.startsWith("'")
 					&& !line.startsWith(".")
-					&& !line.startsWith("data ")
+					&& line4Trim != "data"
 					&& !line.startsWith("da.")
-					&& !line.startsWith("proc ")
+					&& line4Trim != "proc"
 					&& !line.startsWith("pr.")
 					&& !line.startsWith("endproc")
 					&& !line.startsWith("endp.")
@@ -498,7 +508,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	
 		} else {
 			// Don't end program until key press in debug mode (even when no breakpoints are added)
-			sourceLines.splice(i, 0, "GET ___DEBUG_KEY");
+			sourceLines = sourceLines.concat( [ "GET ___DEBUG_KEY"]);
 		}
 		
 		// Save the new code

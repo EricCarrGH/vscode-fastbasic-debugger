@@ -44,9 +44,10 @@ export function activateDebugger(context: vscode.ExtensionContext, factory?: vsc
 					type: 'fastbasic',
 					name: 'Debug File',
 					request: 'launch',
-					sourceFile: targetResource.fsPath,
-          compilerPath: "E.G. c:/fastbasic/fastbasic.exe",
-          emulatorPath: "E.G. c:/atari/Altirra/Altirra64.exe"
+					sourceFile: "${file}",
+          compilerPath: "",
+          emulatorPath: "",
+          windowsPaths: true
 				});
 			}
 		}),

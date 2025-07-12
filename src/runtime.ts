@@ -151,7 +151,7 @@ export class FastbasicRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, noDebug: boolean, emulatorPath: string, executable: string): Promise<void> {
+	public async start(program: string, noDebug: boolean, emulatorPath: string, executable: string, emulatorPathManuallySet: boolean, windowsPaths:boolean): Promise<void> {
  
 		let isWindows = 'win32' === process.platform;
 
@@ -170,66 +170,74 @@ export class FastbasicRuntime extends EventEmitter {
 		let settingsFilePath="";
 
 		let emulatorCommand = "";
+		if (emulatorPathManuallySet) {
+			if (windowsPaths) {
+					executable = executable.split("/").join("\\");
+			}
 
-		if (isWindows) {
-		
-		emulatorCommand = `${emulatorPath} /portable /singleinstance /run "${executable.split("/").join("\\")}"`;
-		
-		 // Build the emulator settings file path
-		pathParts = emulatorPath.split('/');
-		pathParts[pathParts.length-1] = "Altirra.ini";
-		settingsFilePath = pathParts.join('/');
-
-		/* If settings file does not exist, create base settings file with settings that work well for debugging:
-		- Setup H: device under path4
-		- Direct3D 9 so resize does not cause issues
-		- Auto enable Joystick for arrow keys
-		- Disable confirmation on close
-		- Disable pause when inactive
-		*/
-		if (! await this.fileAccessor.doesFileExist(settingsFilePath)) {
-			let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsWin(binLocation));
-
-			await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
-			await new Promise(resolve => setTimeout(resolve, 100));
+			emulatorCommand = `${emulatorPath} "${executable}"`;
+			fastBasicChannel.appendLine(emulatorCommand);
 		} else {
-
-			// File exists, so update the path4 location
-			let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(settingsFilePath));
-			existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
-				return g1+binLocation+g3;
-			});
-
-			await this.fileAccessor.writeFile(settingsFilePath, new TextEncoder().encode(existingSettingsFile));
-			await new Promise(resolve => setTimeout(resolve, 100));
-
-		}
-	} else {
-		// Update settings for Atari800MacX
+			if (isWindows) {
 			
-		// Build the emulator settings file path
-		settingsFilePath = binLocation + 'atari800macx-settings.a8c';
+			emulatorCommand = `${emulatorPath} /portable /singleinstance /run "${executable.split("/").join("\\")}"`;
+			
+			// Build the emulator settings file path
+			pathParts = emulatorPath.split('/');
+			pathParts[pathParts.length-1] = "Altirra.ini";
+			settingsFilePath = pathParts.join('/');
 
-		/* If settings file does not exist, create base settings file with settings that work well for debugging:
-		- Setup H: device under path4
-		- Auto enable Joystick for arrow keys
-		*/
-		//if (! await this.fileAccessor.doesFileExist(iniPath)) {
-			let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsMac(binLocation, executable));
-			await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
-			await new Promise(resolve => setTimeout(resolve, 100));
-		// } else {
+			/* If settings file does not exist, create base settings file with settings that work well for debugging:
+			- Setup H: device under path4
+			- Direct3D 9 so resize does not cause issues
+			- Auto enable Joystick for arrow keys
+			- Disable confirmation on close
+			- Disable pause when inactive
+			*/
+			if (! await this.fileAccessor.doesFileExist(settingsFilePath)) {
+				let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsWin(binLocation));
 
-		// // File exists, so update the path4 location
-		// let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(iniPath));
-	  // existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
-		// 	return g1+binLocation+g3;
-		// });
+				await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
+				await new Promise(resolve => setTimeout(resolve, 100));
+			} else {
 
-		// await this.fileAccessor.writeFile(iniPath, new TextEncoder().encode(existingSettingsFile));
-		// await new Promise(resolve => setTimeout(resolve, 100));
-		emulatorCommand = emulatorCommand.slice();
-		emulatorCommand = `open "${emulatorPath}" -n --args "${settingsFilePath}"`;
+				// File exists, so update the path4 location
+				let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(settingsFilePath));
+				existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
+					return g1+binLocation+g3;
+				});
+
+				await this.fileAccessor.writeFile(settingsFilePath, new TextEncoder().encode(existingSettingsFile));
+				await new Promise(resolve => setTimeout(resolve, 100));
+
+			}
+		} else {
+			// Update settings for Atari800MacX
+				
+			// Build the emulator settings file path
+			settingsFilePath = binLocation + 'atari800macx-settings.a8c';
+
+			/* If settings file does not exist, create base settings file with settings that work well for debugging:
+			- Setup H: device under path4
+			- Auto enable Joystick for arrow keys
+			*/
+			//if (! await this.fileAccessor.doesFileExist(iniPath)) {
+				let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsMac(binLocation, executable));
+				await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
+				await new Promise(resolve => setTimeout(resolve, 100));
+			// } else {
+
+			// // File exists, so update the path4 location
+			// let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(iniPath));
+			// existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
+			// 	return g1+binLocation+g3;
+			// });
+
+			// await this.fileAccessor.writeFile(iniPath, new TextEncoder().encode(existingSettingsFile));
+			// await new Promise(resolve => setTimeout(resolve, 100));
+			emulatorCommand = emulatorCommand.slice();
+			emulatorCommand = `open "${emulatorPath}" -n --args "${settingsFilePath}"`;
+		}
 	}
 	
 	

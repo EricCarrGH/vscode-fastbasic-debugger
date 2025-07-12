@@ -12,3 +12,9 @@
 
 ## 0.6.2
 * Fixed representation of signed numbers (words)
+
+## 0.7.0
+* Bug Fix: Support tab after DATA statements
+* Bug Fix: Wait longer for compiling long programs before erroring out
+* Feature: Enabled CustomEmulator for Mac, allowing starting Altirra in wine
+* Feature: Added WindowsPath setting to keep windows paths for Altirra/Wine use

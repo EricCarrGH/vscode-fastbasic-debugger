@@ -1,7 +1,7 @@
 {
   "name": "fastbasic-debugger",
   "displayName": "FastBasic Debugger",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "publisher": "ericcarr",
   "description": "Runs FastBasic on an Atari emulator, providing debugging support to set breakpoints, step through code, view and change variables. Downloads FastBasic and Atari Emulator automatically on Windows and Mac",
   "author": "Eric Carr",
@@ -173,7 +173,7 @@
               "sourceFile": {
                 "type": "string",
                 "description": "Absolute path to .BAS file.",
-                "default": "${workspaceFolder}/${command:AskForProgramName}"
+                "default": "${file}"
               },
               "trace": {
                 "type": "boolean",
@@ -189,6 +189,11 @@
                 "type": "string",
                 "description": "Full path to the Atari Emulator.",
                 "default": "E.G. C:/atari/Altirra/Altirra64.exe"
+              },
+              "windowsPaths": {
+                "type": "boolean",
+                "default": true,
+                "description": "Set to true to force calling emulatorPath with Windows path style (for running Altirra using Wine)"
               }
             }
           }
@@ -197,11 +202,11 @@
           {
             "type": "fastbasic",
             "request": "launch",
-            "name": "Ask for file name",
-            "program": "${workspaceFolder}/${command:AskForProgramName}",
-            "stopOnEntry": true,
+            "name": "Debug FastBASIC",
+            "sourceFile": "${file}",
             "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
-            "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe"
+            "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe",
+            "windowsPaths": true
           }
         ],
         "configurationSnippets": [
@@ -211,10 +216,11 @@
             "body": {
               "type": "fastbasic",
               "request": "launch",
-              "name": "Ask for file name",
-              "program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
+              "name": "Debug FastBASIC",
+              "sourceFile": "${file}",
               "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
-              "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe"
+              "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe",
+              "windowsPaths": true
             }
           }
         ],
