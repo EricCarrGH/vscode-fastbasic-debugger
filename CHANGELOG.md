@@ -23,9 +23,9 @@
 * Bug Fix: Fix issue where Atari800MacX would not start if multiple copies on disk
 * Supports latest Atari800MacX 6.1 w/ FujiNet
 * Tighter Atari800MacX integration - start/stop stays in sync
-* (TODO) Now compiles source file in place, in case it references other files in same directory
 
 ## 0.8.1
-* Starts Atari800MacX using command line args instead of forcing a custom config
 * Emulators: Downloads Altirra 4.31 and Atari800MacX 6.1.0 if no emulator is present
+* Now starts Atari800MacX using command line args instead of forcing a custom config
+* Now compiles source file in place, in case it references other files in same directory, e.g. DATA img() bytefile "image.dat"
 

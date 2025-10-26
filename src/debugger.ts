@@ -352,33 +352,42 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	
 
 		// Create a bin folder to hold compiled/symbol files
-		
-		
 		let file = args.sourceFile.split('\\').join('/');
 		let fileParts = file.split('/');
 		let filename = fileParts[fileParts.length - 1];
 		let filenameNoExt = filename.split(".")[0] + ".";
-		fileParts[fileParts.length - 1] = "bin";
-		let binFolder = fileParts.join('/');
-		await vscode.workspace.fs.createDirectory(vscode.Uri.file(binFolder));
+        
+		fileParts[fileParts.length - 1] = "";
+        let filePath = fileParts.join('/');
+        let fileNoExt = filePath + filenameNoExt;
+		let binFolder = filePath+"bin";
 
-		// Delete existing files for this source file
+        let sourceNoExt = filePath + filename + '.debug.'; 
+        let sourceFile = sourceNoExt + 'bas';
+        let debugFileNoExt = binFolder + '/' + filename+".debug.";
+        
+		
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(binFolder));
+
+		//Delete existing files for this source file
 		var files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(binFolder));
 		for (let i = 0; i < files.length; i++) {
 			if (files[i][0].startsWith(filenameNoExt)) {
-				await vscode.workspace.fs.delete(vscode.Uri.file(binFolder + '/' + files[i][0]), { useTrash: false });
+				await this._fileAccessor.deleteFile(binFolder + '/' + files[i][0]);
 			}
 		};
-
-		// Copy the source file to the bin folder 
-		await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(binFolder + '/' + filename));
-
-		// Inject debugger code into the bin source file copy
+		
+		// Get list of breakpoints
 		const breakpoints = this._runtime.breakPoints.get(this.normalizePathAndCasing(file)) ?? new Array<IRuntimeBreakpoint>();
 	
+        // Check if we need to inject debugging code
 		let noDebug = Boolean(args.noDebug) || breakpoints.length===0;
-
-		let lineCount = await this.injectDebuggerCode(binFolder + '/' + filename, breakpoints, Boolean(args.noDebug)  );
+        
+        // Make a copy of the source file to inject debugging code
+        await vscode.workspace.fs.copy(vscode.Uri.file(file), vscode.Uri.file(sourceFile), { overwrite: true });
+    
+        // Get line count and inject debugger code if applicable
+		let lineCount = await this.injectDebuggerCode(sourceFile, breakpoints, Boolean(args.noDebug)  );
 		
 		// run the fastbasic compiler
 		fastBasicChannel.clear();
@@ -387,9 +396,9 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		let wroteError = false;
 		//cp.execFile(`${compilerPath}`, ['-g',filename], { cwd: binFolder + '/' }, (err, stdout) => {
-		cp.execFile(`${compilerPath}`, [filename], { cwd: binFolder + '/' }, (err, stdout) => {
+		cp.execFile(`${compilerPath}`, [sourceFile], (err, stdout) => {
 			if (err) {
-
+                
 				// Strip the first two lines as they do not add value, unless they are unexpected
 				let error = err.message.split("\n");
 				if (error[0].startsWith("Command failed:")) {
@@ -403,16 +412,18 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 				let errorMessage = error.join("\n");
 				if (!noDebug) {
 					let line = 1, column = 1;
-					errorMessage = errorMessage.replace(/\.(bas|lst):(\d+):(\d+):/gi, (s, ext, row, col) => {
+					errorMessage = errorMessage.replace(/\.(fb|bas|lst):(\d+):(\d+):/gi, (s, ext, row, col) => {
 						column = col - (row > 1 ? 16 : 31);
 						line = row;
 						return `.${ext}:${row}:${column}: `;
 					});
 
-					errorMessage = errorMessage.replace(/\.(bas|lst):(\d+): /gi, (s, ext, row) => {
+					errorMessage = errorMessage.replace(/\.(fb|bas|lst):(\d+): /gi, (s, ext, row) => {
 						line = Math.min(row, lineCount);
 						return `.${ext}:${line}: `;
 					});
+                    
+                    errorMessage = errorMessage.replace(".debug.bas", "");
 
 					errorMessage = errorMessage.replace("@___DEBUG_CHECK:", "");
 					errorMessage = errorMessage.replace("@___DEBUG_POLL:", "");
@@ -420,46 +431,44 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 				wroteError = errorMessage.length > 0;
 				fastBasicChannel.appendLine("\n" + errorMessage);
-
-				//let category = 'stderr'; // stdout
-
-				/*const e: DebugProtocol.OutputEvent = new OutputEvent(`${errorMessage}\n`, category);
-				e.body.source = new Source(basename(file), this.convertDebuggerPathToClient(file), undefined, undefined, 'fastbasic-debugger');
-				e.body.line = Number(line); //this.convertDebuggerLineToClient(line);
-				e.body.column = Number(column); // this.convertDebuggerColumnToClient(column);
-				this.sendEvent(e);
-				*/
-			//	this.sendEvent(new ExitedEvent(0));
-				this.sendEvent(new TerminatedEvent());
 			}
 		});
-		if (wroteError) {
-			return undefined;
-		}
-		// Wait until the XEX file is created
-		let atariExecutable = binFolder + '/' + filenameNoExt + "xex";
-		if (!wroteError) {
-			await this._fileAccessor.waitUntilFileExists(atariExecutable, 60000);
-		}
 
-		if (! await this._fileAccessor.doesFileExist(atariExecutable)) {
+		// Wait until the XEX file is created
+		let atariExecutableTemp = sourceNoExt + 'xex';
+        let atariExecutable = binFolder + '/' + filenameNoExt + 'xex';
+
+        for (let i = 0; i < 60; i++) {
+            if (wroteError)
+                break;
+            await this._fileAccessor.waitUntilFileExists(atariExecutableTemp, 1000);
+        }
+
+        // Move intermediate files to the bin folder for debugger to parse
+        await this._fileAccessor.safeMove(sourceFile, debugFileNoExt + 'bas');
+        await this._fileAccessor.safeMove(sourceNoExt + 'lst', debugFileNoExt + 'lst');
+        await this._fileAccessor.safeMove(sourceNoExt + 'lbl', debugFileNoExt + 'lbl');
+        
+        // Move others for possible troubleshooting use
+        await this._fileAccessor.safeMove(sourceNoExt + 'asm', debugFileNoExt + 'asm');
+        await this._fileAccessor.safeMove(sourceNoExt + 'o', debugFileNoExt+ 'o');
+        
+        // If the file was not created, abort launch
+		if (! await this._fileAccessor.doesFileExist(atariExecutableTemp)) {
 			if (!wroteError) {
-			fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
+			    fastBasicChannel.appendLine("ERROR: An unknown error has occured compiling the file.");
 			}
-			//response.success = false;
 			this.sendEvent(new TerminatedEvent());
-			/*this.sendErrorResponse(response, { 
-				id: 1001,
-				format: `Unable to compile source file.`,
-				showUser: false});*/
 			return undefined;	// abort launch
 		}
 
-
-		fastBasicChannel.appendLine(`Running in emulator..`);
+        // Copy the .xex file to the bin folder to run in the emulator
+        await vscode.workspace.fs.rename(vscode.Uri.file(atariExecutableTemp), vscode.Uri.file(atariExecutable), { overwrite: true });
+        
+        fastBasicChannel.appendLine(`Running in emulator..`);
 
 		// start the program in the runtime
-		await this._runtime.start(file, noDebug, emulatorPath, atariExecutable, emulatorPathManuallySet, true === (isWindows || args.windowsPaths));
+		await this._runtime.start(debugFileNoExt, file, noDebug, emulatorPath, atariExecutable, emulatorPathManuallySet, true === (isWindows || args.windowsPaths));
 
 		if (Boolean(args.noDebug)) {
 			this.sendEvent(new TerminatedEvent());

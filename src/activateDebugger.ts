@@ -190,12 +190,20 @@ export const workspaceFileAccessor: FileAccessor = {
 		}
 		return false;
 	},
-	async deleteFile(path: string) {
+	async deleteFile(path: string) : Promise<void> {
 		try {
 			await vscode.workspace.fs.delete( vscode.Uri.file(path), {useTrash: false});
 		} catch(e) {}
-		return;
-	}
+	},
+    async safeMove(source: string, dest:string): Promise<void> {
+        try {
+            if (await workspaceFileAccessor.doesFileExist(source)) {
+                await vscode.workspace.fs.rename(vscode.Uri.file(source), vscode.Uri.file(dest), { overwrite: true });
+            }
+        } catch(e) {
+            // Ignore errors
+        }
+    },
 };
 
 function pathToUri(path: string) {

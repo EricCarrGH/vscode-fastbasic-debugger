@@ -14,6 +14,7 @@ export interface FileAccessor {
 	waitUntilFileExists(path: string, timeoutMs?: number) :Promise<boolean>
 	doesFileExist(path: string) :Promise<boolean>;
 	deleteFile(path: string) : Promise<void>;
+    safeMove(source:string, dest:string) : Promise<void>;
 }
 
 export interface IRuntimeBreakpoint {
@@ -143,11 +144,13 @@ export class FastbasicRuntime extends EventEmitter {
 		var child = exec(command);
 		
 		child.on("error", (a,b,c)=> {
+                fastBasicChannel.appendLine(`Program finished running.`);
 				this.sendEvent('end');
 			}); // e.g., command not found
 
 			child.on("close", (code) => {
-					this.sendEvent('end');
+                fastBasicChannel.appendLine(`Program finished running.`);
+				this.sendEvent('end');
 			});
 		
 	}
@@ -155,13 +158,13 @@ export class FastbasicRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, noDebug: boolean, emulatorPath: string, executable: string, emulatorPathManuallySet: boolean, windowsPaths:boolean): Promise<void> {
+	public async start(program: string, originalSource: string, noDebug: boolean, emulatorPath: string, executable: string, emulatorPathManuallySet: boolean, windowsPaths:boolean): Promise<void> {
  
 		let isWindows = 'win32' === process.platform;
 
 		if (!noDebug) {
 			// Load the source, which creates the memory dump file
-			await this.loadSource(program);
+			await this.loadSource(program, originalSource);
 
 			// Send initial message to start communication with the program before launching it
 			await this.sendMessageToProgram(MessageCommand.continue);
@@ -345,34 +348,25 @@ export class FastbasicRuntime extends EventEmitter {
 	// private methods
 
 
-	private async loadSource(file: string): Promise<void> {
-		file = this.normalizePathAndCasing(file);
-		if (this._sourceFile !== file) {
-			this._sourceFile = file;
+	private async loadSource(file: string, sourceFile: string): Promise<void> {
+		sourceFile = this.normalizePathAndCasing(sourceFile);
+		if (this._sourceFile !== sourceFile) {
+			this._sourceFile = sourceFile;
 			
-			let ext  = file.split(".").splice(-1)[0].toLowerCase();
-			if (ext !== "bas" && ext !== "lst" && ext !== "fb") {
-				return;
-			}
-
-			//file = file.replace("readme.md", "test.bas");
-
-			let isWindows = 'win32' === process.platform;
-			var folderDelimiter = isWindows ? "\\" : "/";
+            //let isWindows = 'win32' === process.platform;
+			var folderDelimiter = '/'; //isWindows ? "\\" : "/";
 
 			let symbolFileParts = file.split(folderDelimiter);
-			symbolFileParts[symbolFileParts.length-1] ="bin" + folderDelimiter + symbolFileParts[symbolFileParts.length-1].split(".",1)[0];
-			let symbolFile = symbolFileParts.join(folderDelimiter);
-
-			symbolFileParts[symbolFileParts.length-1] ="bin" + folderDelimiter + "debug.";
-			this._debugFileToProg= symbolFileParts.join(folderDelimiter) + "in";
-			this._debugFileFromProg = symbolFileParts.join(folderDelimiter) + "out";
-			this._debugMemFile = symbolFileParts.join(folderDelimiter) + "mem";
+			symbolFileParts[symbolFileParts.length-1] = "debug.";
+            let debugPrefix = symbolFileParts.join(folderDelimiter);
+			this._debugFileToProg= debugPrefix+ "in";
+			this._debugFileFromProg = debugPrefix + "out";
+			this._debugMemFile = debugPrefix + "mem";
 
 			await this.initializeContents(
-				await this.fileAccessor.readFile(file),
-				await this.fileAccessor.readFile(symbolFile+".lst"),
-				await this.fileAccessor.readFile(symbolFile+".lbl")
+				await this.fileAccessor.readFile(file + "bas"),
+				await this.fileAccessor.readFile(file + "lst"),
+				await this.fileAccessor.readFile(file + "lbl")
 			);
 		}
 	}
