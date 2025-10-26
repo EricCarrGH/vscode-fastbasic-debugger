@@ -12,7 +12,7 @@ On first debug, the extension will prompt to download the FastBasic compiler and
 
 ## Features
 
-* Automatically downloads the latest supported FastBasic (4.6) and Atari Emulator (Altirra or AtariMacX) on Windows or Mac
+* Automatically downloads the latest supported FastBasic and Atari Emulator (Altirra or AtariMacX) on Windows or Mac
 * Compiles and run or debug in emulator with a single key press
 * Inspect and change variables while debugging
 * See variable value in decimal/hex along with address on hover
@@ -94,7 +94,6 @@ For reference, here is a sample file that loads Altirra using wine.
 
 This is a work in progress, with the following limitations:
 
-* It currently installs FastBasic 4.6, which include FujiNet support. There is a more recent version of FastBasic available, which has breaking changes, so it is not yet supported
 * The program opens files on #4 and #5 to communicate with the debugger, so your program must use different channels (e.g. #1, #2) for I/O. I chose #4 and #5 because these are not typically used.  
 * You can only set/remove breakpoints when the program is stopped for debugging, or not running. This is to keep the program execution speed fast.
 * If your program has a lot of variables (or arrays with many entries), tthere will be a noticable pause when stepping through (F10) line by line.  This is because all variable memory is sent to the debugger after each line.
@@ -111,9 +110,10 @@ This is a work in progress, with the following limitations:
 
 ## Under the Hood (how debugging works)
 
-(This section still a work in progress)
 When you press F5, the following happens:
 
 1. Special Debug FastBasic procs are appended to the end of your program, with a unique prefix so they do not interfere with your existing program. 
 2. A "bin" folder is created within the folder where your source file exists. FastBasic creates intermediate files here, along with the final XEX file. 
 3. The emulator is then configured to point the H4: host drive to the bin folder, which the FastBasic debug procs use to communicate with the extension by reading/writing temporary debug,* files.
+
+For more details on how debugging works, see [debugFlow.md](debugFlow.md)
