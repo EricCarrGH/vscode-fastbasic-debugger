@@ -211,11 +211,27 @@ export class FastbasicRuntime extends EventEmitter {
 
 					// File exists, so update the path4 location
 					let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(settingsFilePath));
-					existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
+					
+					// Update existing path4
+					let updatedSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
 						return g1+binLocation+g3;
 					});
 
-					await this.fileAccessor.writeFile(settingsFilePath, new TextEncoder().encode(existingSettingsFile));
+						// Fall back to adding new path4 device
+					if (updatedSettingsFile === existingSettingsFile) {	
+							updatedSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?)(\[)/gmi, (g0,g1,g2) => {
+								return g1+`[{\\"tag\\": \\"hostfs\\",\\"params\\": {\\"readonly\\": false,\\"path4\\": \\"${binLocation}\\"}},`;
+							});
+					}
+
+					// Fall back to adding new devices entry
+					if (updatedSettingsFile === existingSettingsFile) {	
+						updatedSettingsFile = existingSettingsFile.replace(/(\\Profiles\\00000000)(\])/gmi, (g0,g1,g2) => {
+								return g1+"]\r\n"+`"Devices" = "[{\\"tag\\": \\"hostfs\\",\\"params\\": {\\"readonly\\": false,\\"path4\\": \\"${binLocation}\\"}}]"`;
+							});	
+					}
+
+					await this.fileAccessor.writeFile(settingsFilePath, new TextEncoder().encode(updatedSettingsFile));
 					await new Promise(resolve => setTimeout(resolve, 100));
 
 				}

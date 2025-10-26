@@ -1,1 +1,1 @@
-vsce publish
+vsce publishvcse
