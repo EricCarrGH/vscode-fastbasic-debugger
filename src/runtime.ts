@@ -382,16 +382,16 @@ export class FastbasicRuntime extends EventEmitter {
 
 		/* Reference
 		000006r 1               	.export fb_var_AB
-    000006r 1  xx xx xx xx  fb_var_AB:	.res 6	; Float variable
-		000002r 1  xx xx        fb_var_B:	.res 2	; Word variable
+    000006r 1  xx xx xx xx  fb_var_AB:	.res 6	; float variable
+		000002r 1  xx xx        fb_var_B:	.res 2	; word variable
 		000004r 1               	.export fb_var_C
-		000004r 1  xx xx        fb_var_C:	.res 2	; Word Array variable
+		000004r 1  xx xx        fb_var_C:	.res 2	; word Array variable
 		000006r 1               	.export fb_var_D
-		000006r 1  xx xx        fb_var_D:	.res 2	; Byte Array variable
-		000008r 1               	.export fb_var_HW
-		000008r 1  xx xx        fb_var_HW:	.res 2	; String variable
+		000006r 1  xx xx        fb_var_D:	.res 2	; byte Array variable
+		000008r 1               	.export fb_var_H
+		000008r 1  xx xx        fb_var_HW:	.res 2	; string variable
 		00000Ar 1               	.export fb_var_JJ
-		00000Ar 1  xx xx        fb_var_JJ:	.res 2	; String Array variable
+		00000Ar 1  xx xx        fb_var_JJ:	.res 2	; string Array variable
 		00000Cr 1               	.export fb_var____DEBUG_KEY
 		00000Cr 1  xx xx        fb_var____DEBUG_KEY:	.res 2	; Word variable
 		*/
@@ -431,6 +431,9 @@ export class FastbasicRuntime extends EventEmitter {
 			var value;
 			let isLargeArray = false;
 			// Determine byte length for this variable type
+            
+            varType = varType.charAt(0).toUpperCase() + varType.slice(1).toLowerCase();
+
 			var byteLen= VAR_TYPE_LEN.get(varType);
 			if (!byteLen) {
 				console.error(`Warning! unexpected variable type: ${varType} for var: ${name}`);

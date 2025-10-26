@@ -115,11 +115,12 @@ PROC ___DEBUG_POLL
 ENDPROC
 
 PROC ___DEBUG_END
+ ' Wait key press to terminate program
+ get ___DEBUG_I 
  close #4:open #4,8,0,"H4:debug.out"
  put #4, 9 ' End
  close #4
  XIO #5, 33, 0, 0, "H4:debug.in"
- get ___DEBUG_I
 ENDPROC
 
 ' Called before every line when a breakpoint is not set, to check if stepping. 

@@ -25,8 +25,9 @@ const exec = util.promisify(require('child_process').exec);
 
 //const UrlFastbasicMac="https://github.com/dmsc/fastbasic/files/11000997/fastbasic-v4.6-31-g5004ef1-dirty-macosx.zip";
 //const UrlFastbasicWin="https://github.com/dmsc/fastbasic/releases/download/v4.6/fastbasic-v4.6-win32.zip";
-const URL_FASTBASIC_MAC="https://www.carr-designs.com/downloads/fastbasic-v4.6-31-macosx.zip";
-const URL_FASTBASIC_WIN="https://www.carr-designs.com/downloads/fastbasic-v4.6-31-win32.zip";
+const COMPILER_VERSION="4.7HF"
+const URL_FASTBASIC_MAC="https://www.carr-designs.com/downloads/fastbasic-v" + COMPILER_VERSION + "-macosx.zip";
+const URL_FASTBASIC_WIN="https://www.carr-designs.com/downloads/fastbasic-v" + COMPILER_VERSION + "-win32.zip";
 
 const URL_EMULATOR_MAC="https://www.carr-designs.com/downloads/Atari800MacX-6.1.0.zip";
 const URL_EMULATOR_WIN="https://www.carr-designs.com/downloads/Altirra-4.31.zip";
@@ -175,7 +176,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 	}
 	
  protected async validateDependency(key: string, friendlyName: string,
-	 sourceUrl: string, destFolder:string, currentPath: string, executable: string, autoInstall: boolean) : Promise<string> {
+	 sourceUrl: string, destFolder:string, currentPath: string, executable: string, autoInstall: boolean, requirementMesssage: string) : Promise<string> {
 
 		// Check if args provided path exists
 		if (currentPath && currentPath.trim().length>0) {
@@ -186,8 +187,9 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			}
 		}
 		
+        // Check that current path exists and contains the destFolder (in case of new version)
 		currentPath = String(await vsContext.globalState.get(key) ?? "");
-		if (currentPath.trim().length>0) {
+		if (currentPath.trim().length>0 && currentPath.indexOf(destFolder)>=0) {
 			if (await this._fileAccessor.doesFileExist(currentPath)) {
 				return currentPath;
 			} 
@@ -198,8 +200,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		// Offer to install dependency
 		let cancelMessage = "I'll configure it (advanced)";
 		let result = autoInstall ? "go" : await vscode.window.showInformationMessage(
-			`FastBasic or Emulator not configured in launch.json`, 
-			"Download & Install", cancelMessage);
+            requirementMesssage, "Download & Install", cancelMessage);
 
 		// User cancelled
 		if (result === cancelMessage || !result) {return "";}
@@ -213,7 +214,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			installPath = isWindows ? "c:\\atari" : homedir + "/atari";
 		
 			result = await vscode.window.showInformationMessage(
-				`Will install FastBasic & Emulator inside "${installPath}"`,
+				`Will install in "${installPath}"`,
 				textInstall, textChoose);
 
 			// User cancelled
@@ -301,10 +302,12 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			"compilerPath",
 			"FastBasic Compiler",
 			isWindows ? URL_FASTBASIC_WIN : URL_FASTBASIC_MAC,
-			"fastbasic",
+			"fastbasic-" + COMPILER_VERSION,
 			args.compilerPath,
 			"fastbasic" + (isWindows ? ".exe" : ""),
-			false );
+			false,
+            "The latest FastBasic compiler (v" + COMPILER_VERSION + ") is required."
+         );
 
 		if (compilerPath==="") {
 			response.success = false;
@@ -338,7 +341,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 				isWindows ? "Altirra" : "Atari800MacX",
 				emulatorPath,
 				isWindows ? "altirra64.exe" : "atari800macx.app",
-				true
+				true,
+                "An valid emulator is required to run the program."
 				);
 
 		}
@@ -395,8 +399,11 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		fastBasicChannel.appendLine(`Compiling ${filename}..`);
 
 		let wroteError = false;
-		//cp.execFile(`${compilerPath}`, ['-g',filename], { cwd: binFolder + '/' }, (err, stdout) => {
-		cp.execFile(`${compilerPath}`, [sourceFile], (err, stdout) => {
+		//compilerPath = '/Users/eric/atari/fastbasic/fastbasic'
+        cp.execFile(`${compilerPath}`, ['-g',sourceFile], { cwd: binFolder + '/' }, (err, stdout) => {
+		//cp.execFile(`${compilerPath}`, [sourceFile], (err, stdout) => {
+        
+        //cp.execFile(`${compilerPath}`, ['-g',sourceFile], (err, stdout) => {
 			if (err) {
                 
 				// Strip the first two lines as they do not add value, unless they are unexpected
@@ -439,19 +446,15 @@ export class FastbasicDebugSession extends LoggingDebugSession {
         let atariExecutable = binFolder + '/' + filenameNoExt + 'xex';
 
         for (let i = 0; i < 60; i++) {
-            if (wroteError)
-                break;
             await this._fileAccessor.waitUntilFileExists(atariExecutableTemp, 1000);
+            if (wroteError || await this._fileAccessor.doesFileExist(atariExecutableTemp))
+                break;
         }
 
         // Move intermediate files to the bin folder for debugger to parse
         await this._fileAccessor.safeMove(sourceFile, debugFileNoExt + 'bas');
         await this._fileAccessor.safeMove(sourceNoExt + 'lst', debugFileNoExt + 'lst');
         await this._fileAccessor.safeMove(sourceNoExt + 'lbl', debugFileNoExt + 'lbl');
-        
-        // Move others for possible troubleshooting use
-        await this._fileAccessor.safeMove(sourceNoExt + 'asm', debugFileNoExt + 'asm');
-        await this._fileAccessor.safeMove(sourceNoExt + 'o', debugFileNoExt+ 'o');
         
         // If the file was not created, abort launch
 		if (! await this._fileAccessor.doesFileExist(atariExecutableTemp)) {

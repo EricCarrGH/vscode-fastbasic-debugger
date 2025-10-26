@@ -19,13 +19,12 @@
 * Feature: Enabled CustomEmulator for Mac, allowing starting Altirra in wine
 * Feature: Added WindowsPath setting to keep windows paths for Altirra/Wine use
 
-## 0.8.0
-* Bug Fix: Fix issue where Atari800MacX would not start if multiple copies on disk
-* Supports latest Atari800MacX 6.1 w/ FujiNet
-* Tighter Atari800MacX integration - start/stop stays in sync
-
-## 0.8.1
-* Emulators: Downloads Altirra 4.31 and Atari800MacX 6.1.0 if no emulator is present
+## 0.8.0 - 2025-10-26
+* Theme updates: Colored keywords and more
+* Latest compiler support: FastBasic 4.7 (w/ bytefile hotfox)
+* Latest emulator support: Altirra 4.31 and Atari800MacX 6.1.0
 * Now starts Atari800MacX using command line args instead of forcing a custom config
 * Now compiles source file in place, in case it references other files in same directory, e.g. DATA img() bytefile "image.dat"
+* Bug Fix: Fix issue where Atari800MacX would not start if multiple copies on disk
+* Tighter Atari800MacX debug integration - start/stop stays in sync
 

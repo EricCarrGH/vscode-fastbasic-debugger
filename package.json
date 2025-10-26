@@ -1,12 +1,14 @@
 {
   "name": "fastbasic-debugger",
   "displayName": "FastBasic Debugger",
-  "version": "0.8.1",
+  "version": "0.8.0",
   "publisher": "ericcarr",
   "description": "Runs FastBasic on an Atari emulator, providing debugging support to set breakpoints, step through code, view and change variables. Downloads FastBasic and Atari Emulator automatically on Windows and Mac",
   "author": "Eric Carr",
   "license": "MIT",
   "keywords": [
+    "fastbasic",
+    "atari",
     "multi-root ready"
   ],
   "engines": {
@@ -16,8 +18,11 @@
   "categories": [
     "Debuggers"
   ],
-  "private": true,
-  "repository": "https://todo.git",
+  "private": false,
+  "repository": {
+    "type":"git",
+    "url": "https://github.com/EricCarrGH/vscode-fastbasic-debugger.git"
+},
   "bugs": {
     "url": "https://forums.atariage.com/topic/351055-fastbasic-debugger-extension-for-vscode/"
   },
