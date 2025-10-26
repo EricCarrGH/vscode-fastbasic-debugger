@@ -1,13 +1,10 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
-
 import { EventEmitter } from 'events';
 import { fastBasicChannel } from './activateDebugger';
 //import * as cp from 'child_process';
 import util = require('util');
-const exec = util.promisify(require('child_process').exec);
-import { GetEmulatorSettingsMac, GetEmulatorSettingsWin } from './emulatorSettingsFiles';
+const execPromise = util.promisify(require('child_process').exec);
+import { GetEmulatorSettingsWin } from './emulatorSettingsFiles';
+import { exec } from "node:child_process";
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -17,7 +14,6 @@ export interface FileAccessor {
 	waitUntilFileExists(path: string, timeoutMs?: number) :Promise<boolean>
 	doesFileExist(path: string) :Promise<boolean>;
 	deleteFile(path: string) : Promise<void>;
-	
 }
 
 export interface IRuntimeBreakpoint {
@@ -142,12 +138,20 @@ export class FastbasicRuntime extends EventEmitter {
 		super();
 	}
 
+	
 	public async startEmulator(command:string) : Promise<void> {
-		if ('win32' !== process.platform) {
-			await exec(`osascript -e 'quit app "Atari800MacX"'`);
-		}
-		exec(command);
+		var child = exec(command);
+		
+		child.on("error", (a,b,c)=> {
+				this.sendEvent('end');
+			}); // e.g., command not found
+
+			child.on("close", (code) => {
+					this.sendEvent('end');
+			});
+		
 	}
+
 	/**
 	 * Start executing the given program.
 	 */
@@ -170,6 +174,7 @@ export class FastbasicRuntime extends EventEmitter {
 		let settingsFilePath="";
 
 		let emulatorCommand = "";
+
 		if (emulatorPathManuallySet) {
 			if (windowsPaths) {
 					executable = executable.split("/").join("\\");
@@ -180,66 +185,48 @@ export class FastbasicRuntime extends EventEmitter {
 		} else {
 			if (isWindows) {
 			
-			emulatorCommand = `${emulatorPath} /portable /singleinstance /run "${executable.split("/").join("\\")}"`;
-			
-			// Build the emulator settings file path
-			pathParts = emulatorPath.split('/');
-			pathParts[pathParts.length-1] = "Altirra.ini";
-			settingsFilePath = pathParts.join('/');
-
-			/* If settings file does not exist, create base settings file with settings that work well for debugging:
-			- Setup H: device under path4
-			- Direct3D 9 so resize does not cause issues
-			- Auto enable Joystick for arrow keys
-			- Disable confirmation on close
-			- Disable pause when inactive
-			*/
-			if (! await this.fileAccessor.doesFileExist(settingsFilePath)) {
-				let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsWin(binLocation));
-
-				await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
-				await new Promise(resolve => setTimeout(resolve, 100));
-			} else {
-
-				// File exists, so update the path4 location
-				let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(settingsFilePath));
-				existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
-					return g1+binLocation+g3;
-				});
-
-				await this.fileAccessor.writeFile(settingsFilePath, new TextEncoder().encode(existingSettingsFile));
-				await new Promise(resolve => setTimeout(resolve, 100));
-
-			}
-		} else {
-			// Update settings for Atari800MacX
+				emulatorCommand = `${emulatorPath} /portable /singleinstance /run "${executable.split("/").join("\\")}"`;
 				
-			// Build the emulator settings file path
-			settingsFilePath = binLocation + 'atari800macx-settings.a8c';
+				// Build the emulator settings file path
+				pathParts = emulatorPath.split('/');
+				pathParts[pathParts.length-1] = "Altirra.ini";
+				settingsFilePath = pathParts.join('/');
 
-			/* If settings file does not exist, create base settings file with settings that work well for debugging:
-			- Setup H: device under path4
-			- Auto enable Joystick for arrow keys
-			*/
-			//if (! await this.fileAccessor.doesFileExist(iniPath)) {
-				let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsMac(binLocation, executable));
-				await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
-				await new Promise(resolve => setTimeout(resolve, 100));
-			// } else {
+				/* If settings file does not exist, create base settings file with settings that work well for debugging:
+				- Setup H: device under path4
+				- Direct3D 9 so resize does not cause issues
+				- Auto enable Joystick for arrow keys
+				- Disable confirmation on close
+				- Disable pause when inactive
+				*/
+				if (! await this.fileAccessor.doesFileExist(settingsFilePath)) {
+					let defaultIniContents = new TextEncoder().encode(GetEmulatorSettingsWin(binLocation));
 
-			// // File exists, so update the path4 location
-			// let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(iniPath));
-			// existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
-			// 	return g1+binLocation+g3;
-			// });
+					await this.fileAccessor.writeFile(settingsFilePath, defaultIniContents);
+					await new Promise(resolve => setTimeout(resolve, 100));
+				} else {
 
-			// await this.fileAccessor.writeFile(iniPath, new TextEncoder().encode(existingSettingsFile));
-			// await new Promise(resolve => setTimeout(resolve, 100));
-			emulatorCommand = emulatorCommand.slice();
-			emulatorCommand = `open "${emulatorPath}" -n --args "${settingsFilePath}"`;
+					// File exists, so update the path4 location
+					let existingSettingsFile = new TextDecoder().decode(await this.fileAccessor.readFile(settingsFilePath));
+					existingSettingsFile = existingSettingsFile.replace(/(^\s*"Devices".*?\\"path4\\":\s*\\")([^"]*?)(\\")/gmi, (g0,g1,g2,g3) => {
+						return g1+binLocation+g3;
+					});
+
+					await this.fileAccessor.writeFile(settingsFilePath, new TextEncoder().encode(existingSettingsFile));
+					await new Promise(resolve => setTimeout(resolve, 100));
+
+				}
+			} else {
+				// Atari800MacX
+				
+				// Stop existing emualator instance
+				await execPromise(`osascript -e 'quit app "Atari800MacX"'`);
+				await timeout(300);
+				
+				// Set command to start and point H4: to bin directory
+				emulatorCommand = `open -n -W -a "${emulatorPath}" --args -hreadwrite -H4 "${binLocation}" "${executable}"`;
+			}
 		}
-	}
-	
 	
 		await this.startEmulator(emulatorCommand);
 	
@@ -625,9 +612,11 @@ export class FastbasicRuntime extends EventEmitter {
 		let packetType = debugFileResponse[0];
 
 		switch (packetType) {
+			// Program ended
 			case 9:
 				this.sendEvent('end');
 				break;
+
 			case 1:
 			// Flip the two bytes around since they were in backwards on the stack
 			[debugFileResponse[1], debugFileResponse[2]] = [debugFileResponse[2], debugFileResponse[1]];
@@ -807,7 +796,7 @@ export class FastbasicRuntime extends EventEmitter {
 			this.clearedBreakPoints.push(bps[bps.length-1]);
 		}
 
-		
+
 		// Set the number of [word:location][word:value] pairs that were added
 		this.setAtariWord(payload, countIndex, locValCount);
 

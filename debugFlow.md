@@ -8,7 +8,7 @@ This document describes the communication between Debugger (vscode) and Program 
 3. debug.mem - Set of memory locations for Program uses to send a "var dump" to the Debugger
 
 ## Each side performes the following actions on the files to communicate:
-1. Wait for no existience of outgoing response file
+1. Wait for no existence of outgoing response file
 2. Check for the existence of the incoming file
 3. Process incoming file
 4. Respond as a two step process:

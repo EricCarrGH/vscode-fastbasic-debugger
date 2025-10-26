@@ -99,6 +99,12 @@ PROC ___DEBUG_POLL
     loop
 
     close #5
+  else
+    graphics 0
+    print "FASTBASIC EXTENSION DEBUG POLL FAILED"
+    print "CHECK H4: MAPPING IN EMULATOR CONFIG"
+    print "AND PERMISSIONS ON THAT FOLDER"
+    GET C
   endif
 
 	' Reference ___DEBUG_BREAK so FastBasic optimizer will keep it

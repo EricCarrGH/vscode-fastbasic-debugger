@@ -1,14 +1,6 @@
 /*
  * Implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
  * into requests and events of the real "execution engine" or "debugger" (here: class MockRuntime).
- * When implementing your own debugger extension for VS Code, most of the work will go into the Debug Adapter.
- * Since the Debug Adapter is independent from VS Code, it can be used in any client (IDE) supporting the Debug Adapter Protocol.
- *
- * The most important class of the Debug Adapter is the MockDebugSession which implements many DAP requests by talking to the MockRuntime.
- * 
- * 
- * 
- * 
  */
 
 import {
@@ -36,8 +28,8 @@ const exec = util.promisify(require('child_process').exec);
 const URL_FASTBASIC_MAC="https://www.carr-designs.com/downloads/fastbasic-v4.6-31-macosx.zip";
 const URL_FASTBASIC_WIN="https://www.carr-designs.com/downloads/fastbasic-v4.6-31-win32.zip";
 
-const URL_EMULATOR_MAC="https://www.carr-designs.com/downloads/Atari800MacX-6.0.1.zip";
-const URL_EMULATOR_WIN="https://www.carr-designs.com/downloads/Altirra-4.10.zip";
+const URL_EMULATOR_MAC="https://www.carr-designs.com/downloads/Atari800MacX-6.1.0.zip";
+const URL_EMULATOR_WIN="https://www.carr-designs.com/downloads/Altirra-4.31.zip";
 
 /**
  * This interface describes the fastbasic-debugger specific launch attributes 
@@ -97,14 +89,25 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		this._runtime.on('stopOnEntry', () => {
 			this.sendEvent(new StoppedEvent('entry', FastbasicDebugSession.threadID));
 		});
+
 		this._runtime.on('stopOnStep', () => {
 			this.sendEvent(new StoppedEvent('step', FastbasicDebugSession.threadID));
 		});
+
 		this._runtime.on('stopOnBreakpoint', () => {
 			this.sendEvent(new StoppedEvent('breakpoint', FastbasicDebugSession.threadID));
 		});
+
 		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
+		});
+
+		this._runtime.on('end', () => {
+			this.sendEvent(new TerminatedEvent());
+			// Stop existing emualator instance for Mac
+			if ('win32' !== process.platform) {
+				exec(`osascript -e 'quit app "Atari800MacX"'`);
+			}
 		});
 	}
 
@@ -119,7 +122,6 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		if (args.supportsInvalidatedEvent) {
 			this._useInvalidatedEvent = true;
 		}
-		
 
 		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};
@@ -163,6 +165,9 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
 		console.log(`disconnectRequest suspend: ${args.suspendDebuggee}, terminate: ${args.terminateDebuggee}`);
+		if ('win32' !== process.platform) {
+				exec(`osascript -e 'quit app "Atari800MacX"'`);
+			}
 	}
 
 	protected async attachRequest(response: DebugProtocol.AttachResponse, args: IAttachRequestArguments) {
@@ -317,10 +322,10 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		let emulatorPathManuallySet = emulatorPath.trim().length > 0;
 
-		// Attempt to find installed Mac Emulator
+		// Attempt to find installed Mac Emulator. If multiple installed, use the first one found
 		if (!isWindows && !emulatorPathManuallySet) {
 			const { stdout } = await exec("mdfind -name 'Atari800Macx.app'");
-			emulatorPath = stdout.trim();
+			emulatorPath = stdout.split('\n')[0].trim();
 		}
 	  
 		
@@ -453,23 +458,10 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		fastBasicChannel.appendLine(`Running in emulator..`);
 
-		// Don't bother starting debugging if there are no breakpoints
-		//if (noDebug) {
-			
-		
-			// Run the program in the emulator
-		//	await this._runtime.startEmulator(emulatorCommand);
-
-			// cp.execFile(`${emulatorPath}`,["/portable","/singleinstance","/run", atariExecutable.split("/").join("\\") ], (err, stdout) => {
-			// 	if (err) {
-			// 		fastBasicChannel.appendLine(err.message);
-			// 	}
-			// 	fastBasicChannel.appendLine(stdout);
-			// });
 		// start the program in the runtime
 		await this._runtime.start(file, noDebug, emulatorPath, atariExecutable, emulatorPathManuallySet, true === (isWindows || args.windowsPaths));
 
-		if (noDebug) {
+		if (Boolean(args.noDebug)) {
 			this.sendEvent(new TerminatedEvent());
 			return undefined;
 		}
@@ -506,6 +498,8 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 					&& !line.startsWith("pr.")
 					&& !line.startsWith("endproc")
 					&& !line.startsWith("endp.")
+					&& line4Trim != "elif"
+					&& !line.startsWith("eli.")
 				) {
 					sourceLines[i] = `@___DEBUG_CHECK:${sourceLines[i]}`;
 				}

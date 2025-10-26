@@ -1,8 +1,8 @@
 {
 	"name": "FastBasic Atari",
 	"colors": {  
-		"editor.background": "#00489d",
-		"editor.foreground": "#75b8ff",
+		"editor.background": "#083A73",
+		"editor.foreground": "#809EBD",
 		"back": "60aeff eeffff",
     "tab.activeBackground": "#00489d",
     "tab.activeForeground": "#bed9e7",
@@ -57,23 +57,43 @@
 		{
 			"name": "Function, Special Method",
 			"scope": [
-				"entity.name.function",
-				"meta.function-call",
 				"variable.function",
 				"support.function",
 				"keyword.other.special-method"
 			],
 			"settings": {
-				"foreground": "#9f83eb"
+				"foreground": "#d4cd9f"
+			}
+		},
+				{
+			"name": "Control",
+			"scope": [
+				"keyword.control",
+				"entity.name.function",
+				"meta.function-call"
+			],
+			"settings": {
+				
+					"foreground": "#9f83eb"
 			}
 		},
 		{
-			"name": "Block Level Variables",
+			"name": "Numbers",
 			"scope": [
-				"meta.block variable.other"
+				"constant.numeric"
 			],
 			"settings": {
-				"foreground": "#f07178"
+				"foreground": "#DFA782"
+			}
+		},
+		{
+			"name": "Vars",
+			"scope": [
+			"variable.language"
+			],
+			"settings": {
+				"foreground": "#44D0FA"
+				
 			}
 		},
 		{
@@ -85,10 +105,11 @@
 				"entity.other.inherited-class",
 				"markup.heading",
 				"markup.inserted.git_gutter",
-				"meta.group.braces.curly constant.other.object.key.js string.unquoted.label.js"
+				"meta.group.braces.curly constant.other.object.key.js string.unquoted.label.js",
+				"storage.type"
 			],
 			"settings": {
-				"foreground": "#d4cd9f"
+				"foreground": "#eeeeee"
 			}
 		}
 	]
