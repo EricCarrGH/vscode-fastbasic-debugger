@@ -1,17 +1,36 @@
-/*{
-  // Example launch.json that starts Altirra using wine (for Mac users who don't want to use Atari800MacX)
+{
   "version": "0.2.0",
   "configurations": [
-    
     {
       "type": "fastbasic",
       "request": "launch",
-      "name": "Debug FastBASIC",
+      "name": "Debug FastBASIC (Fujisan)",
+      "fujisanBootMode": "cold",
+      "sourceFile": "${file}",
+      "compilerPath": "/Users/pgarcia/atari/fastbasic-4.7HF",
+      "emulatorType": "fujisan",
+      "fujisanHost": "localhost",
+      "fujisanPort": 6502,
+      "bootMode": "warm",
+    },
+    {
+      "type": "fastbasic",
+      "request": "launch",
+      "name": "Debug FastBASIC (Atari800MacX)",
+      "sourceFile": "${file}",
+      "compilerPath": "/Users/pgarcia/atari/fastbasic-4.7HF",
+      "emulatorType": "atari800",
+      "emulatorPath": ""
+    },
+    {
+      "type": "fastbasic",
+      "request": "launch",
+      "name": "Debug FastBASIC (Altirra via Wine)",
       "sourceFile": "${file}",
       "compilerPath": "",
-      "emulatorPath": "wine /Users/eric/Documents/Altirra/Altirra64.exe",
+      "emulatorType": "atari800",
+      "emulatorPath": "wine /Applications/Emulators/Altirra/Altirra64.exe",
       "windowsPaths": true
     }
   ]
 }
- */

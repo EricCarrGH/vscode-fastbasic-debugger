@@ -33,24 +33,26 @@ const URL_EMULATOR_MAC="https://www.carr-designs.com/downloads/Atari800MacX-6.1.
 const URL_EMULATOR_WIN="https://www.carr-designs.com/downloads/Altirra-4.31.zip";
 
 /**
- * This interface describes the fastbasic-debugger specific launch attributes 
- * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the fastbasic-debugger extension.
- * The interface should always match this schema.
+ * Launch config fields for this debugger. The schema is in package.json;
+ * this interface should stay in sync with it.
  */
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-	/** An absolute path to the "program" to debug. */
 	sourceFile: string;
-	/** enable logging the Debug Adapter Protocol */
 	trace?: boolean;
-	/** run without debugging */
 	noDebug?: boolean;
-	/** absolute path to fastbasic compiler */
 	compilerPath: string;
-	/** absolute path to atari emulator compiler */
-	emulatorPath: string;
-	/** force windows paths */
+	/** 'atari800' = launch Atari800MacX/Altirra; 'fujisan' = connect to Fujisan via TCP */
+	emulatorType?: 'atari800' | 'fujisan';
+	/** Path to the emulator executable. Only used when emulatorType is atari800. */
+	emulatorPath?: string;
 	windowsPaths?: boolean;
+	/** Where to find Fujisan's TCP server. Only used when emulatorType is fujisan. */
+	fujisanHost?: string;
+	fujisanPort?: number;
+	/** When using Fujisan, set H4: to the project bin folder over TCP. Default true. */
+	autoConfigureH4?: boolean;
+	/** Boot mode before loading XEX on Fujisan: 'none' | 'warm' | 'cold'. Default 'none'. */
+	fujisanBootMode?: 'none' | 'warm' | 'cold';
 }
 
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
@@ -70,6 +72,7 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 	private _valuesInHex = false;
 	private _useInvalidatedEvent = false;
+	private _emulatorType: 'atari800' | 'fujisan' = 'atari800';
 
 	private _fileAccessor: FileAccessor;
 	/**
@@ -105,8 +108,9 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		this._runtime.on('end', () => {
 			this.sendEvent(new TerminatedEvent());
-			// Stop existing emualator instance for Mac
-			if ('win32' !== process.platform) {
+			this._runtime.cleanup();
+			// Stop Atari800MacX only instance on Mac
+			if (this._emulatorType === 'atari800' && process.platform !== 'win32') {
 				exec(`osascript -e 'quit app "Atari800MacX"'`);
 			}
 		});
@@ -166,9 +170,11 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
 		console.log(`disconnectRequest suspend: ${args.suspendDebuggee}, terminate: ${args.terminateDebuggee}`);
-		if ('win32' !== process.platform) {
-				exec(`osascript -e 'quit app "Atari800MacX"'`);
-			}
+		this._runtime.cleanup();
+		if (this._emulatorType === 'atari800' && process.platform !== 'win32') {
+			exec(`osascript -e 'quit app "Atari800MacX"'`);
+		}
+		super.disconnectRequest(response, args, request);
 	}
 
 	protected async attachRequest(response: DebugProtocol.AttachResponse, args: IAttachRequestArguments) {
@@ -181,6 +187,15 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 		// Check if args provided path exists
 		if (currentPath && currentPath.trim().length>0) {
 			if (await this._fileAccessor.doesFileExist(currentPath)) {
+				// If path looks like a directory (does not end with the executable name), resolve to executable inside it
+				const normalizedPath = currentPath.replace(/[\\/]+$/, '');
+				const executableName = executable.split(/[/\\]/).pop() || executable;
+				if (!normalizedPath.endsWith(executableName)) {
+					const candidate = normalizedPath + '/' + executable;
+					if (await this._fileAccessor.doesFileExist(candidate)) {
+						return candidate;
+					}
+				}
 				return currentPath;
 			} else {
 				return "";
@@ -291,7 +306,18 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
 		args.compilerPath = args.compilerPath || "";
 		args.emulatorPath = args.emulatorPath || "";
-		
+		this._emulatorType = (args.emulatorType || 'atari800') as 'atari800' | 'fujisan';
+		const emulatorType = this._emulatorType;
+		const fujisanHost = args.fujisanHost || 'localhost';
+		const fujisanPort = args.fujisanPort ?? 6502;
+
+		if (emulatorType === 'fujisan' && (fujisanPort < 1 || fujisanPort > 65535)) {
+			response.success = false;
+			response.message = `Fujisan port must be between 1 and 65535 (got ${fujisanPort}).`;
+			this.sendResponse(response);
+			return undefined;
+		}
+
 		if (args.sourceFile.toLocaleLowerCase().endsWith(".json")) {
 			this.sendEvent(new TerminatedEvent());
 			return undefined;
@@ -321,37 +347,37 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 			return undefined;
 		}
 
-		let emulatorPath = args.emulatorPath.trim();
+		let emulatorPath = args.emulatorPath?.trim() || "";
 
-		let emulatorPathManuallySet = emulatorPath.trim().length > 0;
+		// For Fujisan we don't launch an executable; we connect to the TCP server.
+		if (emulatorType !== 'fujisan') {
+			let emulatorPathManuallySet = emulatorPath.length > 0;
 
-		// Attempt to find installed Mac Emulator. If multiple installed, use the first one found
-		if (!isWindows && !emulatorPathManuallySet) {
-			const { stdout } = await exec("mdfind -name 'Atari800Macx.app'");
-			emulatorPath = stdout.split('\n')[0].trim();
-		}
-	  
-		
-		if (emulatorPath.trim().length === 0) {
-				
-			emulatorPath = await this.validateDependency(
-				"emulatorPath",
-				(isWindows ? "Altirra" : "Atari800MacX" ) + " Emulator",
-				isWindows ? URL_EMULATOR_WIN : URL_EMULATOR_MAC,
-				isWindows ? "Altirra" : "Atari800MacX",
-				emulatorPath,
-				isWindows ? "altirra64.exe" : "atari800macx.app",
-				true,
-                "An valid emulator is required to run the program."
+			// Attempt to find installed Mac Emulator. If multiple installed, use the first one found
+			if (!isWindows && !emulatorPathManuallySet) {
+				const { stdout } = await exec("mdfind -name 'Atari800Macx.app'");
+				emulatorPath = stdout.split('\n')[0].trim();
+			}
+
+			if (emulatorPath.trim().length === 0) {
+				emulatorPath = await this.validateDependency(
+					"emulatorPath",
+					(isWindows ? "Altirra" : "Atari800MacX" ) + " Emulator",
+					isWindows ? URL_EMULATOR_WIN : URL_EMULATOR_MAC,
+					isWindows ? "Altirra" : "Atari800MacX",
+					emulatorPath,
+					isWindows ? "altirra64.exe" : "atari800macx.app",
+					true,
+					"An valid emulator is required to run the program."
 				);
+			}
 
-		}
-		
-		if (emulatorPath==="") {
-			response.success = false;
-			response.message = "Could not find Atari Emulator. Re-install or check the emulatorPath in launch.json.";
-			this.sendResponse(response);
-			return undefined;
+			if (emulatorPath==="") {
+				response.success = false;
+				response.message = "Could not find Atari Emulator. Re-install or check the emulatorPath in launch.json.";
+				this.sendResponse(response);
+				return undefined;
+			}
 		}
 	
 
@@ -363,7 +389,6 @@ export class FastbasicDebugSession extends LoggingDebugSession {
         
 		fileParts[fileParts.length - 1] = "";
         let filePath = fileParts.join('/');
-        let fileNoExt = filePath + filenameNoExt;
 		let binFolder = filePath+"bin";
 
         let sourceNoExt = filePath + filename + '.debug.'; 
@@ -467,11 +492,18 @@ export class FastbasicDebugSession extends LoggingDebugSession {
 
         // Copy the .xex file to the bin folder to run in the emulator
         await vscode.workspace.fs.rename(vscode.Uri.file(atariExecutableTemp), vscode.Uri.file(atariExecutable), { overwrite: true });
-        
-        fastBasicChannel.appendLine(`Running in emulator..`);
 
-		// start the program in the runtime
-		await this._runtime.start(debugFileNoExt, file, noDebug, emulatorPath, atariExecutable, emulatorPathManuallySet, true === (isWindows || args.windowsPaths));
+		fastBasicChannel.appendLine(`Running in emulator..`);
+
+		if (emulatorType === 'fujisan') {
+			const autoConfigureH4 = args.autoConfigureH4 !== false;
+			const fujisanBootMode = args.fujisanBootMode ?? 'none';
+			await this._runtime.startWithFujisan(debugFileNoExt, file, noDebug, fujisanHost, fujisanPort, atariExecutable, binFolder, autoConfigureH4, fujisanBootMode);
+		} else {
+			// Launch the emulator and point H4: at the bin folder
+			const emulatorPathManuallySet = (args.emulatorPath?.trim().length ?? 0) > 0;
+			await this._runtime.start(debugFileNoExt, file, noDebug, emulatorPath, atariExecutable, emulatorPathManuallySet, true === (isWindows || args.windowsPaths));
+		}
 
 		if (Boolean(args.noDebug)) {
 			this.sendEvent(new TerminatedEvent());
