@@ -5,6 +5,7 @@ import util = require('util');
 const execPromise = util.promisify(require('child_process').exec);
 import { GetEmulatorSettingsWin } from './emulatorSettingsFiles';
 import { exec } from "node:child_process";
+import { FujisanClient } from './fujisanClient';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -130,11 +131,34 @@ export class FastbasicRuntime extends EventEmitter {
 	private _addressToLineMap = new Map<number, number>();
 	private _lineToAddressMap = new Map<number, number>();
 	private _maxLine : number = 0;
-  private _debugCheckAddress: number = 0;
+	private _debugCheckAddress: number = 0;
 	private _debugBreakAddress: number = 0;
 	private _debugTokRET: number = 0;
 	private _debugTokJUMP: number = 0;
-	
+
+	private _fujisanClient: FujisanClient | null = null;
+	/** Last H4: path configured via Fujisan. */
+	private _lastConfiguredH4Path: string | null = null;
+
+	/** Delay after configuring H4: so Fujisan's restartEmulator() can complete and FujiNet-PC
+	 *  can stabilize before media.load_xex triggers a second Atari800_Coldstart via BINLOAD. */
+	private static readonly H4_CONFIG_SETTLE_TIME_MS = 1500;
+	/** Delay after warm boot before loading the XEX. */
+	private static readonly WARM_BOOT_SETTLE_TIME_MS = 500;
+	/**
+	 * Delay after starting FujiNet-PC (cold mode: stop → load XEX → start) so it is ready
+	 * before the loaded program tries to use the network.
+	 */
+	private static readonly FUJINET_START_SETTLE_TIME_MS = 3000;
+
+	/** Disconnect from Fujisan and release the TCP client, if any. */
+	public cleanup(): void {
+		if (this._fujisanClient) {
+			this._fujisanClient.disconnect();
+			this._fujisanClient = null;
+		}
+	}
+
 	constructor(private fileAccessor: FileAccessor) {
 		super();
 	}
@@ -255,8 +279,80 @@ export class FastbasicRuntime extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Run with Fujisan over TCP.
+	 *
+	 * Fujisan must already be running with the TCP server enabled. When `autoConfigureH4` is true,
+	 * H4: is pointed at `binFolder` via the TCP API (only when the path changes, to avoid extra restarts).
+	 *
+	 * `bootMode` controls how the machine is reset before loading the XEX:
+	 *   - 'none' (default): no explicit boot before `media.load_xex`.
+	 *   - 'warm': warm boot before loading.
+	 *   - 'cold': perform a FujiNet restart sequence before loading.
+	 */
+	public async startWithFujisan(program: string, originalSource: string, noDebug: boolean, fujisanHost: string, fujisanPort: number, executable: string, binFolder: string, autoConfigureH4: boolean = true, bootMode: 'none' | 'warm' | 'cold' = 'none'): Promise<void> {
+		if (!noDebug) {
+			await this.loadSource(program, originalSource);
+			await this.sendMessageToProgram(MessageCommand.continue);
+		}
 
-	
+		fastBasicChannel.appendLine(`Connecting to Fujisan at ${fujisanHost}:${fujisanPort}...`);
+		this._fujisanClient = new FujisanClient(fujisanHost, fujisanPort);
+		try {
+			await this._fujisanClient.connect();
+			fastBasicChannel.appendLine('Connected.');
+		} catch (err: any) {
+			fastBasicChannel.appendLine(`Connection failed: ${err.message}`);
+			fastBasicChannel.appendLine('Make sure Fujisan is running and TCP server is on (Tools → TCP Server).');
+			this.sendEvent('end');
+			return;
+		}
+
+		try {
+			if (autoConfigureH4) {
+				if (this._lastConfiguredH4Path !== binFolder) {
+					fastBasicChannel.appendLine(`Setting H4: to ${binFolder}...`);
+					await this._fujisanClient.setHardDrive(binFolder, 4);
+					this._lastConfiguredH4Path = binFolder;
+					await timeout(FastbasicRuntime.H4_CONFIG_SETTLE_TIME_MS);
+				} else {
+					fastBasicChannel.appendLine(`H4: already set to ${binFolder}, skipping.`);
+				}
+			}
+
+			if (bootMode === 'warm') {
+				fastBasicChannel.appendLine('Warm boot...');
+				await this._fujisanClient.warmBoot();
+				await timeout(FastbasicRuntime.WARM_BOOT_SETTLE_TIME_MS);
+			}
+
+			if (bootMode === 'cold') {
+				fastBasicChannel.appendLine('Stopping FujiNet-PC for clean restart...');
+				await this._fujisanClient.stopFujiNet();
+				await timeout(2000);
+				fastBasicChannel.appendLine('Starting FujiNet-PC...');
+				await this._fujisanClient.startFujiNet();
+				await timeout(FastbasicRuntime.FUJINET_START_SETTLE_TIME_MS);
+			}
+
+			fastBasicChannel.appendLine(`Loading ${executable}...`);
+			await this._fujisanClient.loadXex(executable);
+			if (!autoConfigureH4) {
+				fastBasicChannel.appendLine('XEX loaded. Map H4: in Fujisan to: ' + binFolder);
+			} else {
+				fastBasicChannel.appendLine('XEX loaded.');
+			}
+		} catch (err: any) {
+			fastBasicChannel.appendLine(`Fujisan: ${err.message}`);
+			this._fujisanClient.disconnect();
+			this.sendEvent('end');
+			return;
+		}
+
+		if (!noDebug) {
+			await this.waitOnProgram();
+		}
+	}
 
 	/**
 	 * Continue execution to the next breakpoint or end of program

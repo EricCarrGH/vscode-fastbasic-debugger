@@ -1,7 +1,7 @@
 {
   "name": "fastbasic-debugger",
   "displayName": "FastBasic Debugger",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "ericcarr",
   "description": "Runs FastBasic on an Atari emulator, providing debugging support to set breakpoints, step through code, view and change variables. Downloads FastBasic and Atari Emulator automatically on Windows and Mac",
   "author": "Eric Carr",
@@ -73,6 +73,22 @@
     "request": "never"
   },
   "contributes": {
+    "configuration": {
+      "title": "FastBasic Debug",
+      "properties": {
+        "fastbasic.defaultEmulator": {
+          "type": "string",
+          "enum": ["atari800", "fujisan"],
+          "default": "atari800",
+          "description": "Emulator to use when you run or debug from the editor without a launch config, or when a launch config doesn't set emulatorType. 'atari800' = Atari800MacX or Altirra; 'fujisan' = Fujisan over TCP."
+        },
+        "fastbasic.defaultLaunchConfiguration": {
+          "type": "string",
+          "default": "",
+          "description": "Launch configuration name to use for 'Debug File' and 'Run File' (e.g. 'Debug FastBASIC (Fujisan)'). If set, the editor buttons use this config from launch.json; otherwise they use an inline config with the default emulator. Works on Windows, macOS, and Linux."
+        }
+      }
+    },
     "themes": [
       {
         "label": "FastBasic Atari",
@@ -170,8 +186,7 @@
           "launch": {
             "required": [
               "sourceFile",
-              "compilerPath",
-              "emulatorPath"
+              "compilerPath"
             ],
             "properties": {
               "sourceFile": {
@@ -189,15 +204,47 @@
                 "description": "Full path to the FastBasic compiler.",
                 "default": "E.G. c:/fastbasic/fastbasic.exe"
               },
+              "emulatorType": {
+                "type": "string",
+                "enum": ["atari800", "fujisan"],
+                "description": "Which emulator to use. Use 'atari800' to launch Atari800MacX or Altirra. Use 'fujisan' to connect to an already-running Fujisan instance via its TCP server.",
+                "default": "atari800"
+              },
               "emulatorPath": {
                 "type": "string",
-                "description": "Full path to the Atari Emulator.",
+                "description": "Path to the emulator executable. Only used when emulatorType is 'atari800'. Ignored for Fujisan.",
                 "default": "E.G. C:/atari/Altirra/Altirra64.exe"
               },
               "windowsPaths": {
                 "type": "boolean",
                 "default": true,
                 "description": "Set to true to force calling emulatorPath with Windows path style (for running Altirra using Wine)"
+              },
+              "fujisanHost": {
+                "type": "string",
+                "description": "Host where Fujisan's TCP server is running. Only used when emulatorType is 'fujisan'.",
+                "default": "localhost"
+              },
+              "fujisanPort": {
+                "type": "number",
+                "description": "Port for Fujisan's TCP server. Only used when emulatorType is 'fujisan'.",
+                "default": 6502
+              },
+              "autoConfigureH4": {
+                "type": "boolean",
+                "description": "When using Fujisan, set H4: to your project's bin folder over TCP so the debugger can talk to the program. Set to false if you map H4: yourself.",
+                "default": true
+              },
+              "fujisanBootMode": {
+                "type": "string",
+                "enum": ["none", "warm", "cold"],
+                "enumDescriptions": [
+                  "No explicit boot — BINLOAD handles the internal reset when loading the XEX. FujiNet stays running. Recommended when using FujiNet.",
+                  "Warm boot before loading XEX. Resets Atari state without restarting FujiNet. Use for extra state cleanup with FujiNet.",
+                  "Stop FujiNet-PC, restart it fresh, then load XEX. Use when you need a clean FujiNet state so network apps work correctly after load."
+                ],
+                "description": "Boot mode for XEX load on Fujisan. 'none' (default): just load XEX, FujiNet stays up. 'warm': warm boot then load XEX. 'cold': stop FujiNet → start FujiNet → load XEX.",
+                "default": "none"
               }
             }
           }
@@ -209,8 +256,19 @@
             "name": "Debug FastBASIC",
             "sourceFile": "${file}",
             "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
+            "emulatorType": "atari800",
             "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe",
             "windowsPaths": true
+          },
+          {
+            "type": "fastbasic",
+            "request": "launch",
+            "name": "Debug FastBASIC (Fujisan)",
+            "sourceFile": "${file}",
+            "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
+            "emulatorType": "fujisan",
+            "fujisanHost": "localhost",
+            "fujisanPort": 6502
           }
         ],
         "configurationSnippets": [
@@ -223,8 +281,23 @@
               "name": "Debug FastBASIC",
               "sourceFile": "${file}",
               "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
+              "emulatorType": "atari800",
               "emulatorPath": "E.G. C:/atari/Altirra/Altirra64.exe",
               "windowsPaths": true
+            }
+          },
+          {
+            "label": "FastBasic Debug: Fujisan",
+            "description": "Debug with Fujisan over TCP. H4: is set to your project's bin folder automatically. Start Fujisan and turn on Tools → TCP Server first.",
+            "body": {
+              "type": "fastbasic",
+              "request": "launch",
+              "name": "Debug FastBASIC (Fujisan)",
+              "sourceFile": "${file}",
+              "compilerPath": "E.G. c:/fastbasic/fastbasic.exe",
+              "emulatorType": "fujisan",
+              "fujisanHost": "localhost",
+              "fujisanPort": 6502
             }
           }
         ],

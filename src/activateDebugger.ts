@@ -24,14 +24,30 @@ export function activateDebugger(context: vscode.ExtensionContext, factory?: vsc
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
-				vscode.debug.startDebugging(undefined, {
-					type: 'fastbasic',
-					name: 'Run File',
-					request: 'launch',
-					sourceFile: targetResource.fsPath
-				},
-					{ noDebug: true }
-				);
+				const config = vscode.workspace.getConfiguration('fastbasic');
+				const configName = config.get<string>('defaultLaunchConfiguration', '').trim();
+				const folder = vscode.workspace.getWorkspaceFolder(targetResource) ?? vscode.workspace.workspaceFolders?.[0];
+				if (configName && folder) {
+					vscode.debug.startDebugging(folder, configName, { noDebug: true });
+				} else {
+					const defaultEmulator = config.get<string>('defaultEmulator', 'atari800');
+					const inline: vscode.DebugConfiguration = {
+						type: 'fastbasic',
+						name: 'Run File',
+						request: 'launch',
+						sourceFile: targetResource.fsPath,
+						compilerPath: '',
+						emulatorPath: '',
+						emulatorType: defaultEmulator,
+						windowsPaths: process.platform === 'win32'
+					};
+					// Fujisan uses TCP; provide default host/port when it's the default emulator
+					if (defaultEmulator === 'fujisan') {
+						inline.fujisanHost = 'localhost';
+						inline.fujisanPort = 6502;
+					}
+					vscode.debug.startDebugging(undefined, inline, { noDebug: true });
+				}
 			}
 		}),
 		vscode.commands.registerCommand('extension.fastbasic-debugger.debugEditorContents', (resource: vscode.Uri) => {
@@ -40,15 +56,29 @@ export function activateDebugger(context: vscode.ExtensionContext, factory?: vsc
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
-				vscode.debug.startDebugging(undefined, {
-					type: 'fastbasic',
-					name: 'Debug File',
-					request: 'launch',
-					sourceFile: "${file}",
-          compilerPath: "",
-          emulatorPath: "",
-          windowsPaths: true
-				});
+				const config = vscode.workspace.getConfiguration('fastbasic');
+				const configName = config.get<string>('defaultLaunchConfiguration', '').trim();
+				const folder = vscode.workspace.getWorkspaceFolder(targetResource) ?? vscode.workspace.workspaceFolders?.[0];
+				if (configName && folder) {
+					vscode.debug.startDebugging(folder, configName);
+				} else {
+					const defaultEmulator = config.get<string>('defaultEmulator', 'atari800');
+					const inline: vscode.DebugConfiguration = {
+						type: 'fastbasic',
+						name: 'Debug File',
+						request: 'launch',
+						sourceFile: targetResource.fsPath,
+						compilerPath: '',
+						emulatorPath: '',
+						emulatorType: defaultEmulator,
+						windowsPaths: process.platform === 'win32'
+					};
+					if (defaultEmulator === 'fujisan') {
+						inline.fujisanHost = 'localhost';
+						inline.fujisanPort = 6502;
+					}
+					vscode.debug.startDebugging(undefined, inline);
+				}
 			}
 		}),
 		vscode.commands.registerCommand('extension.fastbasic-debugger.toggleFormatting', (variable) => {
@@ -122,6 +152,19 @@ class FastbasicConfigurationProvider implements vscode.DebugConfigurationProvide
 			return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => {
 				return undefined;	// abort launch
 			});
+		}
+
+		// Resolve ${file} if it was not substituted (e.g. when launching from Run view with no .bas file focused)
+		if (config.sourceFile === '${file}' || config.sourceFile === "${file}") {
+			const editor = vscode.window.activeTextEditor;
+			if (editor && editor.document.languageId === 'basic') {
+				config.sourceFile = editor.document.uri.fsPath;
+			}
+		}
+
+		// Apply default emulator when launch config omits emulatorType
+		if (config.type === 'fastbasic' && !config.emulatorType) {
+			config.emulatorType = vscode.workspace.getConfiguration('fastbasic').get<string>('defaultEmulator', 'atari800');
 		}
 
 		return config;

@@ -28,3 +28,9 @@
 * Bug Fix: Fix issue where Atari800MacX would not start if multiple copies on disk
 * Tighter Atari800MacX debug integration - start/stop stays in sync
 
+## 0.9.0 - 2025-02-01
+* Feature: Fujisan emulator support via TCP (emulatorType: "fujisan")
+* Hybrid approach: TCP for XEX deployment, H4: file protocol for debug
+* Add emulatorType, fujisanHost, fujisanPort to launch config
+* Fujisan must be running with TCP server enabled; H4: must map to project bin folder
+
